@@ -1,209 +1,425 @@
-# KnishIO TypeScript SDK
+<div style="text-align:center">
+  <img src="https://raw.githubusercontent.com/WishKnish/KnishIO-Technical-Whitepaper/master/KnishIO-Logo.png" alt="Knish.IO: Post-Blockchain Platform" />
+</div>
+<div style="text-align:center">info@wishknish.com | https://wishknish.com</div>
 
-A comprehensive TypeScript implementation of the Knish.IO SDK for post-blockchain distributed ledger technology with enhanced type safety and perfect cross-platform compatibility.
+# Knish.IO TypeScript Client SDK
 
-## 🚀 Status: In Development
+This is the official TypeScript implementation of the Knish.IO client SDK. Its purpose is to expose class libraries for building and signing Knish.IO Molecules, composing Atoms, generating Wallets, and much more with enhanced type safety and modern TypeScript features.
 
-This TypeScript SDK is being systematically reverse-engineered from the JavaScript SDK with the following goals:
+## Installation
 
-- ✅ **100% Feature Parity** with the JavaScript SDK
-- ✅ **Enhanced Type Safety** using modern TypeScript patterns
-- ✅ **Cross-SDK Compatibility** - identical cryptographic outputs to JS/Kotlin/PHP SDKs
-- ✅ **2025 TypeScript Best Practices** - ESM-first, strict mode, branded types
+The SDK can be installed via either of the following:
 
-## 📋 Current Implementation Status
+1. `yarn add @wishknish/knishio-client-ts`
 
-### ✅ Completed Components
+2. `npm install @wishknish/knishio-client-ts --save`
 
-#### 🏗️ Core Architecture
-- **Project Structure**: Modern TypeScript project with proper directory organization
-- **Build System**: Modern build configuration using `tsup` with multi-format output (ESM, CJS, IIFE)
-- **Package Configuration**: npm package.json with proper TypeScript exports and dependencies
-- **TypeScript Config**: Strict TypeScript 5.6+ configuration with 2025 best practices
+**Requirements:**
+- Node.js 18 or higher
+- TypeScript 5.6 or higher (for development)
 
-#### 🔐 Type System
-- **Branded Types**: `WalletAddress`, `BundleHash`, `Position`, `MolecularHash`, etc.
-- **Template Literal Types**: Enhanced string validation and type safety
-- **Discriminated Unions**: Type-safe isotope handling (`'C' | 'V' | 'M' | 'U' | 'I' | 'R' | 'B' | 'F'`)
-- **Generic Types**: Flexible, reusable type definitions for all operations
-- **Type Guards**: Runtime type validation functions
+## Basic Usage
 
-#### 🚨 Exception System
-- **BaseException**: Enhanced error handling with context and type safety
-- **22 Exception Classes**: Complete exception hierarchy matching JavaScript SDK
-  - ✅ `AtomIndexException`, `AtomsMissingException`
-  - ✅ `MolecularHashMismatchException`, `SignatureMismatchException`
-  - ✅ `TransferBalanceException`, `WalletCredentialException`
-  - ✅ `InvalidResponseException`
-  - ⏳ 15 additional exceptions (placeholders created)
-- **Exception Factory**: Fluent API for creating typed exceptions
-- **Error Context**: Rich error information for debugging
+The purpose of the Knish.IO SDK is to expose various ledger functions to new or existing applications.
 
-#### 🔒 Cryptographic Library
-- **SHAKE256 Implementation**: Identical outputs to JavaScript SDK (validated against test vectors)
-- **Secret Generation**: Deterministic and random secret generation
-- **Bundle Hash Generation**: Cross-platform compatible bundle hashing
-- **Position Generation**: Cryptographically secure position generation
-- **Wallet Key Generation**: Complete algorithm matching JS SDK exactly
-- **Wallet Address Generation**: 16x16 hash iteration algorithm implementation
-- **Validation Functions**: Input validation for all cryptographic operations
-- **Compatibility Tests**: Built-in test vectors for cross-platform validation
+There are two ways to take advantage of these functions:
 
-#### 🔧 Utility Libraries
-- **String Utilities**: Complete string manipulation library matching JS SDK
-  - Chunking, base conversion, hex/base64 conversion
-  - Validation functions, formatting utilities
-  - Prototype extensions for compatibility
-- **Meta Processing**: Metadata normalization and aggregation
-- **Array Utilities**: Generic array operations with type safety
+1. The easy way: use the `KnishIOClient` wrapper class
 
-#### 🧩 Core Classes
-- **Atom Class**: Complete implementation with all static and instance methods
-  - Isotope-specific validation and type safety
-  - Hash calculation matching JS SDK exactly
-  - JSON serialization/deserialization
-  - Static utility methods (sorting, filtering, validation)
-- **Meta Class**: Static methods for metadata processing
-  - Normalization, aggregation, filtering
-  - Type-safe metadata operations
+2. The granular way: build `Atom` and `Molecule` instances and broadcast GraphQL messages yourself
 
-### ⏳ In Progress
+This document will explain both ways.
 
-#### 🏗️ Core Classes (Remaining)
-- **Molecule Class**: Transaction container with atom management
-- **Wallet Class**: Identity and cryptographic key management
-- **KnishIOClient**: Main SDK client with all operations
-- **AuthToken**: Authentication token management
-- **TokenUnit**: Token unit representation
+## The Easy Way: KnishIOClient Wrapper
 
-#### 📡 GraphQL Integration
-- **Query Classes**: 16 GraphQL query classes
-- **Mutation Classes**: 15 GraphQL mutation classes  
-- **Response Classes**: 19 typed response handlers
-- **Subscription Classes**: 5 real-time subscription handlers
-- **URQL Client Wrapper**: Enhanced GraphQL client
+1. Include the wrapper class in your application code:
+   ```typescript
+   import { KnishIOClient } from '@wishknish/knishio-client-ts'
+   ```
 
-### 📊 Architecture Highlights
+2. Instantiate the class with your node URI:
+   ```typescript
+   const client = new KnishIOClient({
+     uri: myNodeURI,
+     cellSlug: myCellSlug,
+     serverSdkVersion: 3, // Optional, defaults to 3
+     logging: false // Optional, enables logging
+   });
+   ```
 
-#### 🎯 Cross-Platform Compatibility
-- **Identical Cryptographic Outputs**: SHAKE256, wallet generation, molecular hashing
-- **Test Vector Validation**: Automated testing against canonical test vectors
-- **Character Encoding**: Consistent UTF-8 handling across platforms
-- **Numeric Precision**: Exact BigInt arithmetic matching JS SDK
+3. Request authorization token from the node:
+   ```typescript
+   await client.requestAuthToken({
+     seed: 'myTopSecretCode',
+     encrypt: true // Optional, enables encryption
+   });
+   ```
 
-#### 🔒 Type Safety Features
-- **Branded Types**: Prevent mixing of different hex string types
-- **Runtime Validation**: Type guards with runtime checking
-- **Strict Null Checks**: Enhanced null safety with TypeScript strict mode
-- **Generic Constraints**: Complex generic relationships for type safety
-- **Template Literals**: Compile-time string pattern validation
+   (**Note:** The `seed` parameter can be a salted combination of username + password, a biometric hash, an existing user identifier from an external authentication process, for example)
 
-#### 🚀 Modern Development Experience
-- **IntelliSense Support**: Full autocomplete and type hints
-- **Error Prevention**: Compile-time error detection
-- **API Documentation**: Comprehensive TSDoc comments
-- **Development Tools**: Built-in validation and debugging utilities
+4. Begin using `client` to trigger commands described below...
 
-## 🛠️ Development Setup
+### KnishIOClient Methods
 
-### Prerequisites
-- Node.js 18+ 
-- npm 10+
-- TypeScript 5.6+
+- Query metadata for a **Wallet Bundle**. Omit the `bundle` parameter to query your own Wallet Bundle:
+  ```typescript
+  const result = await client.queryBundle({
+    bundle: 'c47e20f99df190e418f0cc5ddfa2791e9ccc4eb297cfa21bd317dc0f98313b1d',
+  });
 
-### Installation
-```bash
-# From the repository root
-cd sdks/KnishIO-Client-TS
-npm install
-```
+  console.log(result); // Raw Metadata
+  ```
 
-### Build Commands
-```bash
-# Build the SDK
-npm run build
+- Query metadata for a **Meta Asset**:
 
-# Type checking
-npm run typecheck  
+  ```typescript
+  const result = await client.queryMeta({
+    metaType: 'Vehicle',
+    metaId: null, // Meta ID
+    key: 'LicensePlate',
+    value: '1H17P',
+    latest: true, // Limit meta values to latest per key
+    throughAtom: true // Optional, query through Atom (default: true)
+  });
 
-# Linting
-npm run lint
+  console.log(result); // Raw Metadata
+  ```
 
-# Testing (when tests are added)
-npm run test
+- Writing new metadata for a **Meta Asset**:
 
-# Development mode with watch
-npm run build:dev
-```
+  ```typescript
+  const result = await client.createMeta({
+    metaType: 'Pokemon',
+    metaId: 'Charizard',
+    meta: {
+      type: 'fire',
+      weaknesses: [
+        'rock',
+        'water',
+        'electric'
+      ],
+      immunities: [
+        'ground',
+      ],
+      hp: 78,
+      attack: 84,
+    },
+    policy: {} // Optional policy object
+  });
 
-### Testing Cryptographic Compatibility
-```typescript
-import { runCompatibilityTests } from '@wishknish/knishio-client-ts'
+  if (result.success()) {
+    // Do things!
+  }
 
-const result = runCompatibilityTests()
-console.log('Cross-platform compatibility:', result.passed)
-```
+  console.log(result.data()); // Raw response
+  ```
 
-## 🎯 Next Steps
+- Query Wallets associated with a Wallet Bundle:
 
-### Priority 1: Core Class Completion
-1. **Molecule Class**: Complete transaction container implementation
-2. **Wallet Class**: Identity and key management with ML-KEM768 support
-3. **KnishIOClient**: Main client with all operations
+  ```typescript
+  const result = await client.queryWallets({
+    bundle: 'c47e20f99df190e418f0cc5ddfa2791e9ccc4eb297cfa21bd317dc0f98313b1d',
+    token: 'FOO', // Optional, filter by token
+    unspent: true // Optional, limit results to unspent wallets
+  });
 
-### Priority 2: GraphQL Integration
-1. **Query/Mutation/Response Classes**: Complete GraphQL operation system
-2. **Subscription System**: Real-time WebSocket subscriptions
-3. **Error Handling**: GraphQL error integration with exception system
+  console.log(result); // Raw response
+  ```
 
-### Priority 3: Validation Integration
-1. **Test Vector Implementation**: Complete validation against `validation/common-config.json`
-2. **Cross-SDK Testing**: Integration with existing validation pipeline
-3. **Generator/Validator Scripts**: TypeScript validation tools
+- Declaring new **Wallets**:
 
-### Priority 4: Advanced Features
-1. **Remaining Exception Classes**: Complete all 22 exception classes
-2. **Rules Engine**: Policy and rule management system
-3. **Versioning System**: Multi-version compatibility
+  (**Note:** If Tokens are sent to undeclared Wallets, **Shadow Wallets** will be used (placeholder
+  Wallets that can receive, but cannot send) to store tokens until they are claimed.)
 
-## 🧪 Testing Strategy
+  ```typescript
+  const result = await client.createWallet({
+    token: 'FOO' // Token Slug for the wallet we are declaring
+  });
 
-### Unit Testing Framework
-- **Test Framework**: Vitest (faster than Jest, native TypeScript support)
-- **Coverage**: Comprehensive test coverage for all components
-- **Mocking**: Type-safe mocks for external dependencies
+  if (result.success()) {
+    // Do things!
+  }
 
-### Cross-Platform Validation
-- **Test Vectors**: Validation against canonical test vectors from `validation/common-config.json`
-- **Cryptographic Compatibility**: Automated testing against other SDK implementations
-- **Integration Tests**: End-to-end testing with KnishIO servers
+  console.log(result.data()); // Raw response
+  ```
 
-### Type Safety Testing
-- **Compile-Time Tests**: TypeScript compiler as testing tool
-- **Runtime Validation**: Type guard testing
-- **API Contract Testing**: Interface compatibility validation
+- Issuing new **Tokens**:
 
-## 📚 Architecture Documentation
+  ```typescript
+  const result = await client.createToken({
+    token: 'CRZY', // Token slug (ticker symbol)
+    amount: '100000000', // Initial amount to issue
+    meta: {
+      name: 'CrazyCoin', // Public name for the token
+      fungibility: 'fungible', // Fungibility style (fungible / nonfungible / stackable)
+      supply: 'limited', // Supply style (limited / replenishable)
+      decimals: '2' // Decimal places
+    },
+    units: [], // Optional, for stackable tokens
+    batchId: null // Optional, for stackable tokens
+  });
 
-### Design Principles
-1. **Cross-Platform First**: Every decision prioritizes multi-SDK compatibility
-2. **Type Safety**: Leverage TypeScript's type system for error prevention
-3. **Performance**: Modern build tools and efficient algorithms
-4. **Developer Experience**: IntelliSense, documentation, error messages
-5. **Backward Compatibility**: Maintain API compatibility with JS SDK
+  if (result.success()) {
+    // Do things!
+  }
 
-### Key Architectural Decisions
-- **Branded Types**: Prevent accidental mixing of different hex string types
-- **Static Methods**: Match JS SDK patterns exactly for compatibility
-- **Exception Hierarchy**: Rich error context while maintaining JS SDK names
-- **Build System**: Multi-format output for maximum compatibility
-- **Module Structure**: Clear separation of concerns with TypeScript namespaces
+  console.log(result.data()); // Raw response
+  ```
 
-## 🤝 Contributing
+- Transferring **Tokens** to other users:
 
-This SDK is being developed by ATLAS-DLT AI Agent with systematic reverse-engineering approach:
+  ```typescript
+  const result = await client.transferToken({
+    bundleHash: '7bf38257401eb3b0f20cabf5e6cf3f14c76760386473b220d95fa1c38642b61d', // Recipient's bundle hash
+    token: 'CRZY', // Token slug
+    amount: '100',
+    units: [], // Optional, for stackable tokens
+    batchId: null // Optional, for stackable tokens
+  });
 
-1. **Architectural Analysis**: Multi-SDK compatibility analysis
-2. **Feature Inventory**: Complete mapping of all JS SDK features  
-3. **Implementation**: Type-safe implementation with cross-platform testing
-4. **Validation**: Integration with existing validation pipeline
+  if (result.success()) {
+    // Do things!
+  }
+
+  console.log(result.data()); // Raw response
+  ```
+
+- Creating a new **Rule**:
+
+  ```typescript
+  const result = await client.createRule({
+    metaType: 'MyMetaType',
+    metaId: 'MyMetaId',
+    rule: [
+      // Rule definition
+    ],
+    policy: {} // Optional policy object
+  });
+
+  if (result.success()) {
+    // Do things!
+  }
+
+  console.log(result.data()); // Raw response
+  ```
+
+- Querying **Atoms**:
+
+  ```typescript
+  const result = await client.queryAtom({
+    molecularHash: 'hash',
+    bundleHash: 'bundle',
+    isotope: 'V',
+    tokenSlug: 'CRZY',
+    latest: true,
+    queryArgs: {
+      limit: 15,
+      offset: 1
+    }
+  });
+
+  console.log(result.data()); // Raw response
+  ```
+
+- Working with **Buffer Tokens**:
+
+  ```typescript
+  // Deposit to buffer
+  const depositResult = await client.depositBufferToken({
+    tokenSlug: 'CRZY',
+    amount: 100,
+    tradeRates: {
+      'OTHER_TOKEN': 0.5
+    }
+  });
+
+  // Withdraw from buffer
+  const withdrawResult = await client.withdrawBufferToken({
+    tokenSlug: 'CRZY',
+    amount: 50
+  });
+
+  console.log(depositResult.data(), withdrawResult.data()); // Raw responses
+  ```
+
+- Getting client fingerprint:
+
+  ```typescript
+  const fingerprint = await client.getFingerprint();
+  console.log(fingerprint);
+
+  const fingerprintData = await client.getFingerprintData();
+  console.log(fingerprintData);
+  ```
+
+## Advanced Usage: Working with Molecules
+
+For more granular control, you can work directly with Molecules:
+
+- Create a new Molecule:
+  ```typescript
+  const molecule = await client.createMolecule();
+  ```
+
+- Create a custom Mutation:
+  ```typescript
+  const mutation = await client.createMoleculeMutation({
+    mutationClass: MyCustomMutationClass
+  });
+  ```
+
+- Sign and check a Molecule:
+  ```typescript
+  molecule.sign();
+  if (!molecule.check()) {
+    // Handle error
+  }
+  ```
+
+- Execute a custom Query or Mutation:
+  ```typescript
+  const result = await client.executeQuery(myQueryOrMutation, variables);
+  ```
+
+## The Hard Way: DIY Everything
+
+This method involves individually building Atoms and Molecules, triggering the signature and validation processes, and communicating the resulting signed Molecule mutation or Query to a Knish.IO node via your favorite GraphQL client.
+
+1. Include the relevant classes in your application code:
+    ```typescript
+    import { Molecule, Wallet, Atom } from '@wishknish/knishio-client-ts'
+    ```
+
+2. Generate a 2048-symbol hexadecimal secret, either randomly, or via hashing login + password + salt, OAuth secret ID, biometric ID, or any other static value.
+
+3. (optional) Initialize a signing wallet with:
+   ```typescript
+   const wallet = new Wallet({
+     secret: mySecret,
+     token: tokenSlug,
+     position: myCustomPosition, // (optional) instantiate specific wallet instance vs. random
+     characters: myCharacterSet // (optional) override the character set used by the wallet
+   })
+   ```
+
+   **WARNING 1:** If ContinuID is enabled on the node, you will need to use a specific wallet, and therefore will first need to query the node to retrieve the `position` for that wallet.
+
+   **WARNING 2:** The Knish.IO protocol mandates that all C and M transactions be signed with a `USER` token wallet.
+
+4. Build your molecule with:
+   ```typescript
+   const molecule = new Molecule({
+     secret: mySecret,
+     sourceWallet: mySourceWallet, // (optional) wallet for signing
+     remainderWallet: myRemainderWallet, // (optional) wallet to receive remainder tokens
+     cellSlug: myCellSlug, // (optional) used to point a transaction to a specific branch of the ledger
+     version: 4 // (optional) specify the molecule version
+   });
+   ```
+
+5. Either use one of the shortcut methods provided by the `Molecule` class (which will build `Atom` instances for you), or create `Atom` instances yourself.
+
+   DIY example:
+    ```typescript
+    // This example records a new Wallet on the ledger
+
+    // Define metadata for our new wallet
+    const newWalletMeta = {
+      address: newWallet.address,
+      token: newWallet.token,
+      bundle: newWallet.bundle,
+      position: newWallet.position,
+      batchId: newWallet.batchId,
+    }
+
+    // Build the C isotope atom
+    const walletCreationAtom = new Atom({
+      position: sourceWallet.position,
+      walletAddress: sourceWallet.address,
+      isotope: 'C',
+      token: sourceWallet.token,
+      metaType: 'wallet',
+      metaId: newWallet.address,
+      meta: newWalletMeta,
+      index: molecule.generateIndex()
+    })
+
+    // Add the atom to our molecule
+    molecule.addAtom(walletCreationAtom)
+
+    // Adding a ContinuID / remainder atom
+    molecule.addContinuIdAtom();
+    ```
+
+   Molecule shortcut method example:
+    ```typescript
+    // This example commits metadata to some Meta Asset
+
+    // Defining our metadata
+    const metadata = {
+      foo: 'Foo',
+      bar: 'Bar'
+    }
+
+    molecule.initMeta({
+      meta: metadata,
+      metaType: 'MyMetaType',
+      metaId: 'MetaId123',
+      policy: {} // Optional policy object
+    });
+    ```
+
+6. Sign the molecule with the stored user secret:
+    ```typescript
+    molecule.sign()
+    ```
+
+7. Make sure everything checks out by verifying the molecule:
+    ```typescript
+    try {
+      molecule.check();
+      // If we're validating a V isotope transaction,
+      // add the source wallet as a parameter
+      molecule.check(sourceWallet);
+    } catch (error) {
+      console.error('Molecule check failed:', error);
+      // Handle the error
+    }
+    ```
+
+8. Broadcast the molecule to a Knish.IO node:
+    ```typescript
+    // Build our query object using the KnishIOClient wrapper
+    const mutation = await client.createMoleculeMutation({
+      mutationClass: MutationProposeMolecule,
+      molecule: molecule
+    });
+
+    // Send the query to the node and get a response
+    const response = await client.executeQuery(mutation);
+    ```
+
+9. Inspect the response...
+    ```typescript
+    // For basic queries, we look at the data property:
+    console.log(response.data())
+
+    // For mutations, check if the molecule was accepted by the ledger:
+    console.log(response.success())
+
+    // We can also check the reason for rejection
+    console.log(response.reason())
+
+    // Some queries may also produce a payload, with additional data:
+    console.log(response.payload())
+    ```
+
+   Payloads are provided by responses to the following queries:
+    1. `QueryBalance` and `QueryContinuId` -> returns a `Wallet` instance
+    2. `QueryWalletList` -> returns a list of `Wallet` instances
+    3. `MutationProposeMolecule`, `MutationRequestAuthorization`, `MutationCreateIdentifier`, `MutationLinkIdentifier`, `MutationClaimShadowWallet`, `MutationCreateToken`, `MutationRequestTokens`, and `MutationTransferTokens` -> returns molecule metadata
+
+## Getting Help
+
+Knish.IO is under active development, and our team is ready to assist with integration questions. The best way to seek help is to stop by our [Telegram Support Channel](https://t.me/wishknish). You can also [send us a contact request](https://knish.io/contact) via our website.
