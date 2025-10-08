@@ -1,0 +1,119 @@
+{
+  "name": "@wishknish/knishio-client-ts",
+  "version": "1.0.0",
+  "productName": "Knish.IO TypeScript SDK Client",
+  "description": "TypeScript implementation of the Knish.IO SDK to consume Knish.IO GraphQL APIs with enhanced type safety.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WishKnish/KnishIO-Client-TS.git"
+  },
+  "contributors": [
+    {
+      "name": "Eugene Teplitsky",
+      "email": "eugene@wishknish.com",
+      "homepage": "https://wishknish.com",
+      "role": "developer"
+    },
+    {
+      "name": "ATLAS-DLT AI Agent",
+      "email": "noreply@anthropic.com",
+      "role": "developer"
+    }
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/client.iife.js",
+  "exports": {
+    ".": {
+      "browser": "./dist/client.iife.js",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types/index.d.ts",
+      "require": "./dist/types/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "wishknish",
+    "knishio",
+    "blockchain",
+    "dag",
+    "post-blockchain",
+    "dlt",
+    "client",
+    "graphql",
+    "xmss",
+    "post-quantum",
+    "quantum-safe",
+    "sdk",
+    "typescript",
+    "ml-kem768",
+    "cryptography",
+    "crystals-kyber",
+    "fips-202",
+    "fips-203",
+    "atlas-dlt"
+  ],
+  "dependencies": {
+    "@noble/post-quantum": "^0.5.2",
+    "@thumbmarkjs/thumbmarkjs": "^0.19.1",
+    "@urql/core": "^5.2.0",
+    "graphql": "^16.11.0",
+    "graphql-ws": "^6.0.6",
+    "isomorphic-fetch": "^3.0.0",
+    "jssha": "^3.3.1",
+    "wonka": "^6.3.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/isomorphic-fetch": "^0.0.39",
+    "@types/jssha": "^3.0.0",
+    "@types/node": "^22.8.1",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.16.0",
+    "prettier": "^3.4.2",
+    "tsup": "^8.3.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.6.3",
+    "vite": "^6.3.5",
+    "vite-plugin-dts": "^4.2.3",
+    "vitest": "^2.1.8"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not ie <= 8",
+    "supports es6-module"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs,iife --clean",
+    "build:test": "tsup src/index.ts --format esm,cjs,iife --tsconfig tsconfig.build.json --clean",
+    "build:dev": "tsup src/index.ts --format esm,cjs --dts --sourcemap --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:ui": "vitest --ui",
+    "dev": "vite",
+    "prepublishOnly": "npm run build",
+    "selftest": "npm run build && node self-test.cjs"
+  },
+  "files": [
+    "/src",
+    "/dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "packageManager": "yarn@4.10.3",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

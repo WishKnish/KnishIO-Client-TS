@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Disable isolatedDeclarations for build to allow testing
+    "isolatedDeclarations": false,
+    
+    // Less strict for initial build testing
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": false,
+    
+    // Allow emitting even with errors for testing
+    "noEmitOnError": false
+  }
+}

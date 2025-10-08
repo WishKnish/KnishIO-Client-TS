@@ -1,0 +1,101 @@
+{
+  "compilerOptions": {
+    // Language and Environment
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "isolatedDeclarations": false,
+
+    // Emit
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "removeComments": true,
+    "importHelpers": true,
+    "downlevelIteration": true,
+    "newLine": "lf",
+
+    // JavaScript Support
+    "allowJs": false,
+    "checkJs": false,
+
+    // Type Checking - Strict Mode (2025 Best Practice)
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": false,
+
+    // Modules
+    "moduleDetection": "force",
+    "allowUmdGlobalAccess": false,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    
+    // Emit
+    "noEmit": false,
+    "emitDecoratorMetadata": false,
+    "experimentalDecorators": false,
+
+    // Interop Constraints
+    "verbatimModuleSyntax": false,
+
+    // Language Service
+    "skipLibCheck": true,
+
+    // Completeness
+    "skipDefaultLibCheck": false,
+
+    // Advanced
+    "preserveSymlinks": false,
+    "preserveWatchOutput": true,
+
+    // Path mapping for internal modules
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"],
+      "@/types/*": ["types/*"],
+      "@/core/*": ["core/*"],
+      "@/libraries/*": ["libraries/*"],
+      "@/query/*": ["query/*"],
+      "@/mutation/*": ["mutation/*"],
+      "@/response/*": ["response/*"],
+      "@/exception/*": ["exception/*"],
+      "@/subscribe/*": ["subscribe/*"],
+      "@/instance/*": ["instance/*"],
+      "@/versions/*": ["versions/*"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "src/**/*.json"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "__tests__"
+  ],
+  "ts-node": {
+    "esm": true
+  }
+}
