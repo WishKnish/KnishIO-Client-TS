@@ -57,7 +57,6 @@ import type Query from '../query/Query'
  */
 export default class ResponseProposeMolecule extends Response {
   private $__clientMolecule: any
-  private $__payload: any = null
 
   /**
    * Class constructor
@@ -82,7 +81,7 @@ export default class ResponseProposeMolecule extends Response {
    * Initialize response object with payload data
    * Matches JavaScript SDK init method exactly
    */
-  init(): void {
+  override init(): void {
     const payloadJson = Dot.get(this.data(), 'payload')
     try {
       this.$__payload = Object.prototype.toString.call(payloadJson) === '[object String]'
@@ -125,7 +124,7 @@ export default class ResponseProposeMolecule extends Response {
    * Returns whether molecule was accepted or not
    * Matches JavaScript SDK success method exactly
    */
-  success(): boolean {
+  override success(): boolean {
     return this.status() === 'accepted'
   }
 
@@ -141,7 +140,7 @@ export default class ResponseProposeMolecule extends Response {
    * Returns the reason for rejection
    * Matches JavaScript SDK reason method exactly
    */
-  reason(): string {
+  override reason(): string {
     return Dot.get(this.data(), 'reason', 'Invalid response from server') as string
   }
 
@@ -149,7 +148,7 @@ export default class ResponseProposeMolecule extends Response {
    * Returns payload object
    * Matches JavaScript SDK payload method exactly
    */
-  payload(): any {
+  override payload(): any {
     return this.$__payload
   }
 }

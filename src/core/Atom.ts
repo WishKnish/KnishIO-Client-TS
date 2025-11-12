@@ -54,7 +54,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
  * while ensuring perfect compatibility with other SDK implementations.
  */
 
-import { shake256, convertToBase17 } from '@/libraries/crypto'
+import { convertToBase17 } from '@/libraries/crypto'
 import JsSHA from 'jssha'
 import { PROTOCOL_CONFIG } from '@/constants'
 import { handleIsotope, isWalletAddress, isPosition } from '@/types/guards'

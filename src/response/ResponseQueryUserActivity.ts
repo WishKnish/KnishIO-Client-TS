@@ -73,7 +73,7 @@ export default class ResponseQueryUserActivity extends Response {
   /**
    * Returns processed user activity data
    */
-  payload(): any {
+  override payload(): any {
     const data = JSON.parse(JSON.stringify(this.data()))
 
     if (data.instances) {

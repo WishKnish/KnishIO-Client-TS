@@ -490,10 +490,18 @@ export interface GraphQLClient {
     variables?: TVariables
   ): Promise<GraphQLResponse<TResult>>
 
+  // Alias for mutation() to match JS SDK interface
+  mutate<TResult = unknown, TVariables = GraphQLVariables>(
+    request: GraphQLRequest,
+    variables?: TVariables
+  ): Promise<GraphQLResponse<TResult>>
+
   subscription<TResult = unknown, TVariables = GraphQLVariables>(
     request: GraphQLRequest,
     variables?: TVariables
   ): AsyncIterableIterator<GraphQLResponse<TResult>>
+
+  getUri(): string
 }
 
 export interface UrqlClientWrapper extends GraphQLClient {

@@ -49,6 +49,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import { CodeException } from '@/exception'
 import type Response from '@/response/Response'
 import type { GraphQLClient } from '@/types'
+import type { TypedDocumentNode } from '@urql/core'
 
 /**
  * Base Query class for constructing GraphQL queries
@@ -57,7 +58,7 @@ export default class Query {
   protected client: GraphQLClient
   protected knishIOClient: any // Will be KnishIOClient type
   protected $__variables: Record<string, any> | null = null
-  protected $__query: string | null = null
+  protected $__query: string | TypedDocumentNode<any, any> | null = null
   protected $__response: Response | null = null
   protected $__request: any = null
 

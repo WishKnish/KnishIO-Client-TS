@@ -48,7 +48,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import JsSHA from 'jssha'
 import { randomString, chunkSubstr } from '@/libraries/strings'
-import { generateBundleHash, generateSecret, shake256 } from '@/libraries/crypto'
+import { generateBundleHash, generateSecret, shake256, generateBatchId } from '@/libraries/crypto'
 import WalletCredentialException from '@/exception/WalletCredentialException'
 import { isWalletAddress, isBundleHash, isPosition } from '@/types'
 // Post-quantum cryptography for ML-KEM768 key encapsulation
@@ -72,6 +72,13 @@ export default class Wallet {
   public tokenUnits: any[]
   public tradeRates: Record<string, any>
   public molecules: Record<string, any>
+
+  // Token metadata (populated from query responses)
+  public tokenName?: string
+  public tokenAmount?: string
+  public tokenSupply?: string
+  public tokenFungibility?: string
+  public createdAt?: string
 
   constructor({
     secret = null,
@@ -292,6 +299,62 @@ export default class Wallet {
   }
 
   /**
+   * Sets up a batch ID - either using the sender's, or a new one
+   * Matches JavaScript SDK Wallet.initBatchId exactly
+   */
+  initBatchId({
+    sourceWallet,
+    isRemainder = false
+  }: {
+    sourceWallet: Wallet
+    isRemainder?: boolean
+  }): void {
+    if (sourceWallet.batchId) {
+      this.batchId = isRemainder ? sourceWallet.batchId : generateBatchId({})
+    }
+  }
+
+  /**
+   * Split token units between wallets
+   * Matches JavaScript SDK Wallet.splitUnits exactly
+   *
+   * @param units - Array of token unit IDs to transfer
+   * @param remainderWallet - Wallet to receive units not being transferred
+   * @param recipientWallet - Wallet to receive the transferred units (optional)
+   */
+  splitUnits(
+    units: string[],
+    remainderWallet: Wallet,
+    recipientWallet: Wallet | null = null
+  ): void {
+    // No units supplied, nothing to split
+    if (units.length === 0) {
+      return
+    }
+
+    // Init recipient & remainder token units
+    const recipientTokenUnits: any[] = []
+    const remainderTokenUnits: any[] = []
+
+    this.tokenUnits.forEach(tokenUnit => {
+      if (units.includes(tokenUnit.id)) {
+        recipientTokenUnits.push(tokenUnit)
+      } else {
+        remainderTokenUnits.push(tokenUnit)
+      }
+    })
+
+    // Reset token units to the sending value
+    this.tokenUnits = recipientTokenUnits
+
+    // Set token units to recipient & remainder
+    if (recipientWallet !== null) {
+      recipientWallet.tokenUnits = recipientTokenUnits
+    }
+    remainderWallet.tokenUnits = remainderTokenUnits
+  }
+
+  /**
    * Get token units data
    * Stub for compatibility
    */
@@ -319,9 +382,9 @@ export default class Wallet {
    * Initializes the ML-KEM key pair (matches JavaScript SDK exactly)
    */
   initializeMLKEM(): void {
-    // Generate a 64-byte (512-bit) seed from the Knish.IO private key  
-    // Use deterministic approach: generateSecret(key, 128) → 128 hex chars = 64 bytes
-    const seedHex = generateSecret(this.key!, 128)  // 128 hex chars = 64 bytes
+    // Generate a 64-byte (512-bit) seed from the Knish.IO private key
+    // Use deterministic approach: generateSecret(key, 64) → matches JS SDK exactly
+    const seedHex = generateSecret(this.key!, 64)  // Matches JS SDK for cross-platform compatibility
     
     // Convert the hex string to a Uint8Array  
     const seed = new Uint8Array(64)
@@ -408,7 +471,7 @@ export default class Wallet {
     // Import shared secret as CryptoKey
     const key = await crypto.subtle.importKey(
       'raw',
-      sharedSecret,
+      sharedSecret as BufferSource,
       { name: 'AES-GCM' },
       false,
       ['encrypt']
@@ -418,7 +481,7 @@ export default class Wallet {
     const encryptedContent = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
-      message
+      message as BufferSource
     )
     
     // Combine IV and encrypted content
@@ -440,7 +503,7 @@ export default class Wallet {
     // Import shared secret as CryptoKey
     const key = await crypto.subtle.importKey(
       'raw',
-      sharedSecret,
+      sharedSecret as BufferSource,
       { name: 'AES-GCM' },
       false,
       ['decrypt']
@@ -450,7 +513,7 @@ export default class Wallet {
     const decryptedContent = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv },
       key,
-      ciphertext
+      ciphertext as BufferSource
     )
     
     return new Uint8Array(decryptedContent)

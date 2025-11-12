@@ -59,10 +59,8 @@ import Mutation from '@/mutation/Mutation'
 import Response from '@/response/Response'
 
 // 2025 TypeScript: Zod validation integration
-import { 
-  validateClientConfig, 
-  validateTransferParams,
-  type ValidationResult 
+import {
+  validateClientConfig
 } from '@/validation/ValidationService'
 
 // Enhanced configuration validation (Phase 2)
@@ -111,7 +109,8 @@ import {
   CodeException,
   UnauthenticatedException,
   TransferBalanceException,
-  WalletShadowException
+  WalletShadowException,
+  StackableUnitAmountException
 } from '@/exception'
 
 // Type imports
@@ -135,7 +134,7 @@ export default class KnishIOClient {
   private $__cellSlug: string | null = null
   private $__encrypt: boolean = false
   private $__uris: string[] = []
-  private $__client: GraphQLClient
+  private $__client!: GraphQLClient
   private $__serverSdkVersion: number = 3
   private $__logging: boolean = false
   private $__authTokenObjects: Record<string, AuthToken | null> = {}
@@ -193,10 +192,10 @@ export default class KnishIOClient {
     } = validatedConfig
     
     this.initialize({
-      uri,
-      cellSlug,
-      socket,
-      client,
+      uri: uri as string | string[],
+      cellSlug: cellSlug as string | null,
+      socket: socket as { socketUri: string | null; appKey?: string } | null,
+      client: client as GraphQLClient | null,
       serverSdkVersion,
       logging
     })
@@ -253,8 +252,11 @@ export default class KnishIOClient {
    * Get random uri from specified this.$__uris
    */
   getRandomUri(): string {
+    if (this.$__uris.length === 0) {
+      throw new Error('No URIs configured')
+    }
     const rand = Math.floor(Math.random() * this.$__uris.length)
-    return this.$__uris[rand]
+    return this.$__uris[rand]!
   }
 
   /**
@@ -445,19 +447,20 @@ export default class KnishIOClient {
   /**
    * Creates a new molecule mutation
    */
-  async createMoleculeMutation({
+  async createMoleculeMutation<T extends Mutation>({
     mutationClass,
     molecule = null
   }: {
-    mutationClass: typeof Mutation
+    mutationClass: new (client: GraphQLClient, knishIOClient: KnishIOClient, molecule: Molecule) => T
     molecule?: Molecule | null
-  }): Promise<Mutation> {
+  }): Promise<T> {
     this.log('info', `KnishIOClient::createMoleculeMutation() - Creating a new ${mutationClass.name} query...`)
 
     // If you don't supply the molecule, we'll generate one for you
     const _molecule = molecule || await this.createMolecule({})
 
-    const mutation = new mutationClass(this.client(), this) as Mutation
+    // Pass molecule to constructor for MutationProposeMolecule subclasses
+    const mutation = new mutationClass(this.client(), this, _molecule)
 
     if (!(mutation instanceof Mutation)) {
       throw new CodeException(`${this.constructor.name}::createMoleculeMutation() - This method only accepts Mutation subclasses!`)
@@ -521,75 +524,75 @@ export default class KnishIOClient {
 
   /**
    * Transfer tokens between wallets
-   * Enhanced with 2025 TypeScript validation patterns
+   * Matches JavaScript SDK transferToken implementation exactly
    */
-  async transferToken(params: {
+  async transferToken({
+    bundleHash,
+    token,
+    amount = null,
+    units = [],
+    batchId = null,
+    sourceWallet = null
+  }: {
     bundleHash: string
     token: string
     amount?: number | null
     units?: string[]
     batchId?: string | null
     sourceWallet?: Wallet | null
-  }): Promise<ValidationResult<Response | null>> {
-    // 2025 Pattern: Validate parameters with Zod
-    const transferParams = {
-      recipient: params.bundleHash,
-      amount: params.amount || 0,
-      token: params.token
-    }
-    
-    const validationResult = validateTransferParams(transferParams)
-    
-    if (!validationResult.success) {
-      return {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid transfer parameters',
-          details: validationResult.error.details,
-          context: 'transferToken'
-        }
-      }
-    }
-    
-    // Use validated parameters
-    const validatedParams = validationResult.data
-    let {
-      bundleHash,
-      token,
-      amount = null,
-      units = [],
-      batchId = null,
-      sourceWallet = null
-    } = params
+  }): Promise<Response | null> {
     // Calculate amount & set meta key
     if (units.length > 0) {
       // Can't move stackable units AND provide amount
-      if (amount && amount > 0) {
-        throw new CodeException('Cannot specify both amount and units')
+      if (amount !== null && amount > 0) {
+        throw new StackableUnitAmountException()
       }
+
       amount = units.length
     }
 
-    // Build recipient wallet
-    const recipientWallet = Wallet.create({
-      bundle: bundleHash,
-      token,
-      batchId
-    })
-
-    // Get source wallet
-    if (!sourceWallet) {
-      sourceWallet = await this.getSourceWallet()
+    // Ensure amount is set
+    if (amount === null) {
+      amount = 0
     }
 
-    // Check balance
-    if (!sourceWallet.balance || sourceWallet.balance < (amount || 0)) {
+    // Get a source wallet
+    if (sourceWallet === null) {
+      sourceWallet = await this.querySourceWallet({
+        token,
+        amount
+      })
+    }
+
+    // Do you have enough tokens?
+    if (sourceWallet === null || Decimal.cmp(sourceWallet.balance, amount) < 0) {
       throw new TransferBalanceException()
     }
 
-    // Create remainder wallet
+    // Attempt to get the recipient's wallet
+    const recipientWallet = Wallet.create({
+      bundle: bundleHash,
+      token
+    })
+
+    // Compute the batch ID for the recipient (typically used by stackable tokens)
+    if (batchId !== null) {
+      recipientWallet.batchId = batchId
+    } else {
+      recipientWallet.initBatchId({
+        sourceWallet
+      })
+    }
+
+    // Create a remainder from the source wallet
     const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+
+    // Token units splitting
+    sourceWallet.splitUnits(
+      units,
+      remainderWallet,
+      recipientWallet
+    )
 
     // Build the molecule itself
     const molecule = await this.createMolecule({
@@ -597,25 +600,33 @@ export default class KnishIOClient {
       remainderWallet
     })
 
-    // For now, return a basic implementation
-    // Full implementation would create and execute MutationTransferTokens
-    return null
+    const query = await this.createMoleculeMutation({
+      mutationClass: MutationTransferTokens,
+      molecule
+    })
+
+    query.fillMolecule({
+      recipientWallet,
+      amount
+    })
+
+    return await this.executeQuery(query)
   }
 
   /**
    * Request authorization token
    */
   async requestAuthToken({
-    secret = null,
-    seed = null,
-    cellSlug = null,
-    encrypt = false
+    secret: _secret = null,
+    seed: _seed = null,
+    cellSlug: _cellSlug = null,
+    encrypt: _encrypt = false
   }: {
     secret?: string | null
     seed?: string | null
     cellSlug?: string | null
     encrypt?: boolean
-  }): Promise<Response | null> {
+  } = {}): Promise<Response | null> {
     // SDK versions 2 and below do not utilize an authorization token
     if (this.$__serverSdkVersion < 3) {
       this.log('warn', 'KnishIOClient::authorize() - Server SDK version does not require an authorization...')
@@ -743,7 +754,8 @@ export default class KnishIOClient {
     const sourceWallet = response.payload() as Wallet | null
 
     // Do you have enough tokens?
-    if (sourceWallet === null || Decimal.cmp(sourceWallet.balance || 0, amount) < 0) {
+    const amountNum = typeof amount === 'string' ? Number(amount) : amount
+    if (sourceWallet === null || Decimal.cmp(sourceWallet.balance || 0, amountNum) < 0) {
       throw new TransferBalanceException()
     }
 
@@ -785,7 +797,7 @@ export default class KnishIOClient {
    */
   async queryBundle({
     bundle = null,
-    fields = null,
+    fields: _fields = null,
     raw = false
   }: {
     bundle?: BundleHash | string | string[] | null
@@ -832,7 +844,7 @@ export default class KnishIOClient {
     key = null,
     value = null,
     latest = null,
-    fields = null,
+    fields: _fields = null,
     filter = null,
     queryArgs = null,
     count = null,
@@ -1259,7 +1271,7 @@ export default class KnishIOClient {
     amount = null,
     meta = null,
     batchId = null,
-    units = null
+    units: _units = null
   }: {
     token: TokenSlug | string
     amount?: number | string | null
@@ -1269,26 +1281,26 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createToken() - Creating token ${token}...`)
 
-    const mutation = this.createQuery(MutationCreateToken) as MutationCreateToken
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateToken })
 
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
+    // Create recipient wallet for new tokens
+    const recipientWallet = new Wallet({
+      secret: this.getSecret(),
+      bundle: this.getBundle(),
+      token: token.toUpperCase(),
+      batchId: batchId as any
+    })
 
     // Initialize the create token mutation
     await mutation.fillMolecule({
-      sourceWallet,
-      token: token.toUpperCase(),
-      amount,
-      meta,
-      batchId,
-      units
+      recipientWallet,
+      amount: amount ?? 0,
+      meta
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Token creation failed')
@@ -1304,7 +1316,7 @@ export default class KnishIOClient {
     token,
     to = null,
     amount = null,
-    units = null,
+    units: _units = null,
     meta = null,
     batchId = null
   }: {
@@ -1317,27 +1329,21 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::requestTokens() - Requesting ${amount || 'units'} of ${token}...`)
 
-    const mutation = this.createQuery(MutationRequestTokens) as MutationRequestTokens
-
-    // Get source wallet if needed
-    const sourceWallet = await this.getSourceWallet()
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationRequestTokens })
 
     // Initialize the request tokens mutation
     await mutation.fillMolecule({
-      sourceWallet,
       token: token.toUpperCase(),
-      to,
-      amount,
-      units,
+      amount: amount ?? 0,
+      metaType: to || '',
+      metaId: to || '',
       meta,
       batchId
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Token request failed')
@@ -1352,7 +1358,7 @@ export default class KnishIOClient {
   async burnTokens({
     token,
     amount = null,
-    units = null,
+    units: _units = null,
     sourceWallet = null
   }: {
     token: TokenSlug | string
@@ -1371,18 +1377,21 @@ export default class KnishIOClient {
     }
 
     // Create a transfer to null address (burn)
-    const mutation = this.createQuery(MutationTransferTokens) as MutationTransferTokens
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationTransferTokens })
 
-    await mutation.fillMolecule({
-      sourceWallet,
-      recipient: '0000000000000000000000000000000000000000000000000000000000000000', // Burn address
-      token: token.toUpperCase(),
-      amount,
-      units
+    // Create recipient wallet for burn address
+    const recipientWallet = new Wallet({
+      secret: this.getSecret(),
+      bundle: '0000000000000000000000000000000000000000000000000000000000000000',
+      token: token.toUpperCase()
     })
 
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-    const response = await this.executeQuery(moleculeMutation)
+    await mutation.fillMolecule({
+      recipientWallet,
+      amount: amount ?? 0
+    })
+
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Token burn failed')
@@ -1398,7 +1407,7 @@ export default class KnishIOClient {
     token,
     amount = null,
     units = null,
-    sourceWallet = null
+    sourceWallet: _sourceWallet = null
   }: {
     token: TokenSlug | string
     amount?: number | string | null
@@ -1419,11 +1428,11 @@ export default class KnishIOClient {
    * Fuse token units
    */
   async fuseToken({
-    bundleHash,
+    bundleHash: _bundleHash,
     tokenSlug,
-    newTokenUnit,
-    fusedTokenUnitIds,
-    sourceWallet = null
+    newTokenUnit: _newTokenUnit,
+    fusedTokenUnitIds: _fusedTokenUnitIds,
+    sourceWallet: _sourceWallet = null
   }: {
     bundleHash: BundleHash | string
     tokenSlug: TokenSlug | string
@@ -1452,22 +1461,21 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createWallet() - Creating wallet for token ${token}...`)
 
-    const mutation = this.createQuery(MutationCreateWallet) as MutationCreateWallet
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateWallet })
 
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
-
-    // Initialize the create wallet mutation
-    await mutation.fillMolecule({
-      sourceWallet,
+    // Create new wallet for this token
+    const newWallet = new Wallet({
+      secret: this.getSecret(),
+      bundle: this.getBundle(),
       token: token.toUpperCase()
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
+    // Initialize the create wallet mutation
+    await mutation.fillMolecule(newWallet)
 
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Wallet creation failed')
@@ -1482,7 +1490,7 @@ export default class KnishIOClient {
   async claimShadowWallet({
     token,
     batchId = null,
-    molecule = null
+    molecule: _molecule = null
   }: {
     token: TokenSlug | string
     batchId?: BatchId | string | null
@@ -1510,23 +1518,17 @@ export default class KnishIOClient {
       throw new WalletShadowException('Wallet is not a shadow wallet')
     }
 
-    const mutation = this.createQuery(MutationClaimShadowWallet) as MutationClaimShadowWallet
-
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationClaimShadowWallet })
 
     // Initialize the claim shadow wallet mutation
     await mutation.fillMolecule({
-      sourceWallet,
-      token: token.toUpperCase(),
+      token: token.toUpperCase() as TokenSlug,
       batchId: shadowWallet.batchId
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Shadow wallet claim failed')
@@ -1592,25 +1594,19 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createMeta() - Creating metadata for ${metaType}:${metaId}...`)
 
-    const mutation = this.createQuery(MutationCreateMeta) as MutationCreateMeta
-
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateMeta })
 
     // Initialize the create meta mutation
     await mutation.fillMolecule({
-      sourceWallet,
       metaType: metaType.toUpperCase(),
       metaId,
       meta,
       policy
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Metadata creation failed')
@@ -1635,25 +1631,19 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createRule() - Creating rule for ${metaType}:${metaId}...`)
 
-    const mutation = this.createQuery(MutationCreateRule) as MutationCreateRule
-
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateRule })
 
     // Initialize the create rule mutation
     await mutation.fillMolecule({
-      sourceWallet,
-      metaType: metaType.toUpperCase(),
-      metaId,
+      metaType: metaType.toUpperCase() as MetaType,
+      metaId: metaId as MetaId,
       rule,
       policy
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Rule creation failed')
@@ -1699,24 +1689,18 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createIdentifier() - Creating identifier of type ${type}...`)
 
-    const mutation = this.createQuery(MutationCreateIdentifier) as MutationCreateIdentifier
-
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateIdentifier })
 
     // Initialize the create identifier mutation
     await mutation.fillMolecule({
-      sourceWallet,
       type,
       contact,
       code
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Identifier creation failed')
@@ -1737,23 +1721,15 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::linkIdentifier() - Linking identifier of type ${type}...`)
 
-    const mutation = this.createQuery(MutationLinkIdentifier) as MutationLinkIdentifier
+    // Create the mutation (extends Mutation directly, not MutationProposeMolecule)
+    const mutation = this.createQuery(MutationLinkIdentifier)
 
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
-
-    // Initialize the link identifier mutation
-    await mutation.fillMolecule({
-      sourceWallet,
+    // Execute with variables
+    const response = await this.executeQuery(mutation, {
+      bundle: this.getBundle(),
       type,
-      contact
+      content: contact
     })
-
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
-    // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
 
     if (!response) {
       throw new CodeException('Identifier linking failed')
@@ -1792,15 +1768,12 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::activeSession() - Declaring active session for ${metaType}:${metaId}...`)
 
-    const mutation = this.createQuery(MutationActiveSession) as MutationActiveSession
+    // Create the mutation (extends Mutation directly, not MutationProposeMolecule)
+    const mutation = this.createQuery(MutationActiveSession)
 
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
-
-    // Initialize the active session mutation
-    await mutation.fillMolecule({
-      sourceWallet,
-      bundle,
+    // Execute with variables
+    const response = await this.executeQuery(mutation, {
+      bundle: bundle || this.getBundle(),
       metaType: metaType.toUpperCase(),
       metaId,
       ipAddress,
@@ -1810,12 +1783,6 @@ export default class KnishIOClient {
       timeZone,
       json
     })
-
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
-    // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
 
     if (!response) {
       throw new CodeException('Active session declaration failed')
@@ -1848,21 +1815,17 @@ export default class KnishIOClient {
       })
     }
 
-    const mutation = this.createQuery(MutationDepositBufferToken) as MutationDepositBufferToken
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationDepositBufferToken })
 
     // Initialize the deposit buffer token mutation
     await mutation.fillMolecule({
-      sourceWallet,
-      tokenSlug: tokenSlug.toUpperCase(),
-      amount,
+      amount: typeof amount === 'string' ? Number(amount) : amount,
       tradeRates
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Buffer token deposit failed')
@@ -1892,21 +1855,21 @@ export default class KnishIOClient {
       sourceWallet = await this.getSourceWallet()
     }
 
-    const mutation = this.createQuery(MutationWithdrawBufferToken) as MutationWithdrawBufferToken
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationWithdrawBufferToken })
 
     // Initialize the withdraw buffer token mutation
-    await mutation.fillMolecule({
-      sourceWallet,
-      tokenSlug: tokenSlug.toUpperCase(),
-      amount,
-      signingWallet
-    })
-
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
+    const recipients: Record<string, any> = {}
+    recipients[this.getBundle()] = amount
+    // Only include signingWallet if it exists (exactOptionalPropertyTypes compliance)
+    const fillMoleculeParams: any = { recipients }
+    if (signingWallet) {
+      fillMoleculeParams.signingWallet = signingWallet
+    }
+    await mutation.fillMolecule(fillMoleculeParams)
 
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Buffer token withdrawal failed')
@@ -1931,18 +1894,13 @@ export default class KnishIOClient {
   } = {}): Promise<Response> {
     this.log('info', 'KnishIOClient::requestGuestAuthToken() - Requesting guest auth token...')
 
-    const mutation = this.createQuery(MutationRequestAuthorizationGuest) as MutationRequestAuthorizationGuest
+    // Create the mutation (extends Mutation directly, not MutationProposeMolecule)
+    const mutation = this.createQuery(MutationRequestAuthorizationGuest)
 
-    // Initialize the guest auth mutation
-    await mutation.fillMolecule({
+    // Execute with variables
+    const response = await this.executeQuery(mutation, {
       cellSlug: cellSlug || this.getCellSlug()
     })
-
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
-    // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
 
     if (!response) {
       throw new CodeException('Guest auth token request failed')
@@ -1971,22 +1929,16 @@ export default class KnishIOClient {
     // Set the secret
     this.setSecret(secret)
 
-    const mutation = this.createQuery(MutationRequestAuthorization) as MutationRequestAuthorization
-
-    // Get source wallet
-    const sourceWallet = await this.getSourceWallet()
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationRequestAuthorization })
 
     // Initialize the profile auth mutation
     await mutation.fillMolecule({
-      sourceWallet,
-      cellSlug: this.getCellSlug()
+      meta: { encrypt: encrypt ? 'true' : 'false' }
     })
 
-    // Create the molecule mutation
-    const moleculeMutation = await this.createMoleculeMutation({ mutationClass: mutation })
-
     // Execute the mutation
-    const response = await this.executeQuery(moleculeMutation)
+    const response = await this.executeQuery(mutation)
 
     if (!response) {
       throw new CodeException('Profile auth token request failed')

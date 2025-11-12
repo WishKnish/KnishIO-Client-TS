@@ -76,7 +76,7 @@ export default class ResponseMetaTypeViaAtom extends Response {
    * Returns meta type instance results via atom
    * Matches JavaScript SDK payload method exactly
    */
-  payload(): any | null {
+  override payload(): any | null {
     const metaTypeData = this.data()
 
     if (!metaTypeData || metaTypeData.length === 0) {

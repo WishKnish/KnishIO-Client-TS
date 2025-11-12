@@ -24,6 +24,8 @@ export interface ValidationResult<T> {
     details?: string[]
     code?: string
     context?: Record<string, any>
+    timestamp?: string
+    operation?: string
   }
   warnings?: string[]
 }
@@ -31,11 +33,11 @@ export interface ValidationResult<T> {
 // Enhanced error information with detailed context
 export interface ResponseError {
   message: string
-  code?: string
+  code?: string | undefined
   details?: any
-  context?: string
-  timestamp?: string
-  operation?: string
+  context?: string | Record<string, any> | undefined
+  timestamp?: string | undefined
+  operation?: string | undefined
 }
 
 // Response validation schemas for runtime type checking
@@ -92,10 +94,13 @@ export interface ConfigValidationResult<T> extends ValidationResult<T> {
 export interface ResponseMetadata {
   timestamp: string
   operation: string
-  duration?: number
-  requestId?: string
-  serverVersion?: string
+  duration?: number | undefined
+  requestId?: string | undefined
+  serverVersion?: string | undefined
   clientVersion: string
+  // Additional properties used in enhanced error handling
+  warnings?: string[] | undefined
+  error?: ResponseError | undefined
 }
 
 // Enhanced response type with comprehensive metadata

@@ -48,7 +48,8 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import Query from './Query'
 import ResponseAtom from '../response/ResponseAtom'
-import type { UrqlClientWrapper } from '../client/GraphQLClient'
+import { gql } from '@urql/core'
+import type { GraphQLClient } from '../types/graphql'
 import type KnishIOClient from '../KnishIOClient'
 
 /**
@@ -60,10 +61,10 @@ export default class QueryAtom extends Query {
    * Create new QueryAtom instance
    * Matches JavaScript SDK constructor signature exactly
    */
-  constructor(graphQLClient: UrqlClientWrapper, knishIOClient: KnishIOClient) {
+  constructor(graphQLClient: GraphQLClient, knishIOClient: KnishIOClient) {
     super(graphQLClient, knishIOClient)
 
-    this.$__query = `query(
+    this.$__query = gql`query(
       $molecularHashes: [String!],
       $bundleHashes: [String!],
       $positions:[String!],

@@ -74,7 +74,7 @@ export default class ResponsePolicy extends Response {
   /**
    * Returns the policy payload
    */
-  payload(): any {
+  override payload(): any {
     const policy = this.data()
 
     if (!policy) {

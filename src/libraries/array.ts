@@ -72,7 +72,7 @@ export function diff<T>(...arrays: T[][]): T[] {
   return [].concat(...arrays.map((arr, i) => {
     const others = arrays.slice(0)
     others.splice(i, 1)
-    const unique = [...new Set([].concat(...others as any))]
+    const unique: T[] = [...new Set([].concat(...others as any))] as T[]
     return arr.filter(item => !unique.includes(item))
   }) as any)
 }
@@ -83,7 +83,7 @@ export function diff<T>(...arrays: T[][]): T[] {
  */
 export function intersect<T>(...arrays: T[][]): T[] {
   if (arrays.length === 0) return []
-  if (arrays.length === 1) return arrays[0]
+  if (arrays.length === 1) return arrays[0]!
   
   return arrays.reduce((first, second) => 
     first.filter(item => second.includes(item))

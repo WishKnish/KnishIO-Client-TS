@@ -77,7 +77,7 @@ export default class ResponseContinuId extends Response {
    * Returns the ContinuID wallet
    * Matches JavaScript SDK payload method exactly
    */
-  payload(): Wallet | null {
+  override payload(): Wallet | null {
     let wallet: Wallet | null = null
 
     const continuId = this.data()

@@ -76,7 +76,7 @@ export default class ResponseMetaType extends Response {
    * Returns meta type instance results
    * Matches JavaScript SDK payload method exactly
    */
-  payload(): any | null {
+  override payload(): any | null {
     const metaTypeData = this.data()
 
     if (!metaTypeData || metaTypeData.length === 0) {

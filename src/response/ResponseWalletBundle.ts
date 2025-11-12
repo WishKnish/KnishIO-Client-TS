@@ -76,7 +76,7 @@ export default class ResponseWalletBundle extends Response {
    * Returns a wallet bundle with normalized metadata
    * Matches JavaScript SDK payload() method exactly
    */
-  payload(): Record<string, any> | null {
+  override payload(): Record<string, any> | null {
     const bundleData = this.data() as any[]
 
     if (!bundleData || bundleData.length === 0) {

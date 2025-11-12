@@ -48,7 +48,8 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import Query from './Query'
 import Response from '../response/Response'
-import type { UrqlClientWrapper } from '../client/GraphQLClient'
+import { gql } from '@urql/core'
+import type { GraphQLClient } from '../types/graphql'
 import type KnishIOClient from '../KnishIOClient'
 
 /**
@@ -60,10 +61,10 @@ export default class QueryBatch extends Query {
    * Create new QueryBatch instance
    * Matches JavaScript SDK constructor signature exactly
    */
-  constructor(graphQLClient: UrqlClientWrapper, knishIOClient: KnishIOClient) {
+  constructor(graphQLClient: GraphQLClient, knishIOClient: KnishIOClient) {
     super(graphQLClient, knishIOClient)
 
-    this.$__query = `query( $batchId: String ) {
+    this.$__query = gql`query( $batchId: String ) {
       Batch( batchId: $batchId ) {
         ${QueryBatch.getFields()},
         children {

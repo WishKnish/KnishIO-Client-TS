@@ -48,6 +48,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import Query from './Query'
 import ResponseWalletBundle from '../response/ResponseWalletBundle'
+import { gql } from '@urql/core'
 import type GraphQLClient from '../libraries/GraphQLClient'
 import type KnishIOClient from '../KnishIOClient'
 
@@ -62,7 +63,7 @@ export default class QueryWalletBundle extends Query {
   constructor(graphQLClient: GraphQLClient, knishIOClient: KnishIOClient) {
     super(graphQLClient, knishIOClient)
 
-    this.$__query = `
+    this.$__query = gql`
       query($bundleHashes: [String!]) {
         WalletBundle(bundleHashes: $bundleHashes) {
           bundleHash,

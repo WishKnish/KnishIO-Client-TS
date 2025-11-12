@@ -73,7 +73,7 @@ export default class ResponseQueryActiveSession extends Response {
   /**
    * Returns processed active session data
    */
-  payload(): any {
+  override payload(): any {
     const list = this.data()
 
     if (!list) {

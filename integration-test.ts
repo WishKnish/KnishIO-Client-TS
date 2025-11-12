@@ -328,10 +328,33 @@ async function testClientConnectivity(): Promise<{ client: any | null; authSucce
       },
       'TypeScript Authentication'
     );
-    
-    const authSuccess = authResponse?.success?.() || false;
-    logTest('Server authentication (TypeScript)', authSuccess, 
-      authSuccess ? null : `Auth failed: ${authResponse?.reason?.() || 'Unknown error'}`, 
+
+    // DEBUG: Log actual response structure
+    console.log('[DEBUG] Auth Response:', authResponse);
+    console.log('[DEBUG] Response keys:', Object.keys(authResponse || {}));
+    console.log('[DEBUG] success type:', typeof authResponse?.success);
+    console.log('[DEBUG] reason type:', typeof authResponse?.reason);
+
+    // Enhanced success check with fallbacks
+    const authSuccess = (() => {
+      if (!authResponse) return false;
+      if (typeof authResponse.success === 'function') return authResponse.success();
+      if (typeof authResponse.success === 'boolean') return authResponse.success;
+      return false;
+    })();
+
+    // Enhanced reason extraction
+    const authReason = (() => {
+      if (!authResponse) return 'No response received';
+      if (typeof authResponse.reason === 'function') return authResponse.reason();
+      if (authResponse.reason) return authResponse.reason;
+      if (authResponse.error) return authResponse.error;
+      if (authResponse.message) return authResponse.message;
+      return `Unknown error (response type: ${typeof authResponse})`;
+    })();
+
+    logTest('Server authentication (TypeScript)', authSuccess,
+      authSuccess ? null : `Auth failed: ${authReason}`,
       responseTime
     );
     

@@ -48,7 +48,8 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import Query from './Query'
 import ResponseMetaType from '../response/ResponseMetaType'
-import type { UrqlClientWrapper } from '../client/GraphQLClient'
+import { gql } from '@urql/core'
+import type { GraphQLClient } from '../types/graphql'
 import type KnishIOClient from '../KnishIOClient'
 
 /**
@@ -60,10 +61,10 @@ export default class QueryMetaType extends Query {
    * Create new QueryMetaType instance
    * Matches JavaScript SDK constructor signature exactly
    */
-  constructor(graphQLClient: UrqlClientWrapper, knishIOClient: KnishIOClient) {
+  constructor(graphQLClient: GraphQLClient, knishIOClient: KnishIOClient) {
     super(graphQLClient, knishIOClient)
 
-    this.$__query = `query( $metaType: String, $metaTypes: [ String! ], $metaId: String, $metaIds: [ String! ], $key: String, $keys: [ String! ], $value: String, $values: [ String! ], $count: String, $latest: Boolean, $filter: [ MetaFilter! ], $queryArgs: QueryArgs, $countBy: String, $cellSlug: String ) {
+    this.$__query = gql`query( $metaType: String, $metaTypes: [ String! ], $metaId: String, $metaIds: [ String! ], $key: String, $keys: [ String! ], $value: String, $values: [ String! ], $count: String, $latest: Boolean, $filter: [ MetaFilter! ], $queryArgs: QueryArgs, $countBy: String, $cellSlug: String ) {
       MetaType( metaType: $metaType, metaTypes: $metaTypes, metaId: $metaId, metaIds: $metaIds, key: $key, keys: $keys, value: $value, values: $values, count: $count, filter: $filter, queryArgs: $queryArgs, countBy: $countBy, cellSlug: $cellSlug ) {
         metaType,
         instanceCount {

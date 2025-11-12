@@ -57,7 +57,7 @@ export default class ResponseTransferTokens extends ResponseProposeMolecule {
    * Returns result of the transfer
    * Matches JavaScript SDK payload method exactly
    */
-  payload(): { reason: string | null; status: string | null } {
+  override payload(): { reason: string | null; status: string | null } {
     const result = {
       reason: null as string | null,
       status: null as string | null

@@ -52,7 +52,6 @@ import Wallet from './Wallet'
 import CheckMolecule from '@/libraries/CheckMolecule'
 import { chunkSubstr, hexToBase64 } from '@/libraries/strings'
 import { generateBundleHash, generateOTSSignature } from '@/libraries/crypto'
-import { deepCloning } from '@/libraries/array'
 import {
   AtomsMissingException,
   BalanceInsufficientException,

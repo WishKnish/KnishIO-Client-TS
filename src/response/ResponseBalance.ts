@@ -76,7 +76,7 @@ export default class ResponseBalance extends Response {
    * Returns a wallet with balance
    * Matches JavaScript SDK payload() method exactly
    */
-  payload(): Wallet | null {
+  override payload(): Wallet | null {
     const walletData = this.data() as any
 
     if (!walletData || !walletData.bundleHash || !walletData.tokenSlug) {

@@ -57,9 +57,8 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import type { 
   AtomIsotope, 
-  KnishIOErrorType, 
-  HexChar, 
-  Base17Char,
+  KnishIOErrorType,
+  HexChar,
   HexPattern,
   Base17Pattern,
   WalletAddressPattern,
@@ -69,10 +68,6 @@ import type {
   ErrorMessageTemplate,
   ValidationErrorTemplate,
   OperationErrorTemplate,
-  QueryType,
-  MutationType,
-  SubscriptionType,
-  BalanceQueryType,
   NodeEnvironment
 } from '../constants'
 

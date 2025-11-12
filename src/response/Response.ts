@@ -57,7 +57,7 @@ import { UniversalResponse, ValidationResult } from '@/types/response'
  * Enhanced with standardized interface and ValidationResult support
  */
 export default class Response implements UniversalResponse<any> {
-  protected dataKey: string | null
+  public dataKey: string | null
   protected errorKey: string = 'exception'
   protected $__payload: any = null
   protected $__query: Query
@@ -89,7 +89,7 @@ export default class Response implements UniversalResponse<any> {
       const error = Dot.get(this.$__response, this.errorKey)
 
       if (String(error).includes('Unauthenticated')) {
-        throw new UnauthenticatedException()
+        throw new UnauthenticatedException('Unauthenticated request')
       }
 
       throw new InvalidResponseException()
@@ -186,7 +186,7 @@ export default class Response implements UniversalResponse<any> {
         success: false,
         error: {
           message: this.reason() || 'Unknown error',
-          context: this.constructor.name,
+          context: this.constructor.name as any,
           details: this.$__response?.errors || []
         }
       }

@@ -88,9 +88,9 @@ export function randomString(
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     const randomValues = new Uint8Array(length)
     crypto.getRandomValues(randomValues)
-    
+
     for (let i = 0; i < length; i++) {
-      result += alphabet.charAt(randomValues[i] % alphabet.length)
+      result += alphabet.charAt(randomValues[i]! % alphabet.length)
     }
   } else {
     // Fallback to Math.random (less secure but compatible)
@@ -310,7 +310,7 @@ export function toCamelCase(str: string): string {
   
   return str
     .toLowerCase()
-    .replace(/[^a-zA-Z0-9]+(.)/g, (match, chr) => chr.toUpperCase())
+    .replace(/[^a-zA-Z0-9]+(.)/g, (_match, chr) => chr.toUpperCase())
 }
 
 /**

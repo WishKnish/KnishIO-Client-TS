@@ -248,10 +248,10 @@ export default class CheckMolecule {
       const metas = Meta.aggregateMeta(atom.meta)
 
       for (const key of policyArray) {
-        let policy = metas[key]
+        const policyRaw = metas[key]
 
-        if (policy) {
-          policy = JSON.parse(policy as string) as Record<string, any>
+        if (policyRaw) {
+          const policy = JSON.parse(policyRaw as string) as Record<string, any>
 
           for (const [policyName, policyValue] of Object.entries(policy)) {
             if (!policyArray.includes(policyName)) {

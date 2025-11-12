@@ -55,7 +55,12 @@ import {
 } from '@urql/core'
 import { createClient as createWSClient } from 'graphql-ws'
 import { pipe, subscribe } from 'wonka'
-import type { GraphQLClient as IGraphQLClient } from '@/types'
+import type {
+  GraphQLClient as IGraphQLClient,
+  GraphQLRequest,
+  GraphQLResponse,
+  GraphQLVariables
+} from '@/types'
 import type Wallet from '@/core/Wallet'
 
 /**
@@ -89,8 +94,7 @@ export default class GraphQLClient implements IGraphQLClient {
 
   private createUrqlClient({
     serverUri,
-    socket,
-    encrypt
+    socket
   }: {
     serverUri: string
     socket?: { socketUri: string | null } | null
@@ -111,7 +115,7 @@ export default class GraphQLClient implements IGraphQLClient {
         subscriptionExchange({
           forwardSubscription: (operation) => ({
             subscribe: (sink) => {
-              const disposable = wsClient.subscribe(operation, sink)
+              const disposable = wsClient.subscribe(operation as any, sink as any)
               return { unsubscribe: disposable }
             }
           })
@@ -153,29 +157,63 @@ export default class GraphQLClient implements IGraphQLClient {
     })
   }
 
-  async query<TResult = unknown, TVariables = Record<string, any>>(
-    request: { query: string; variables?: TVariables },
+  async query<TResult = unknown, TVariables = GraphQLVariables>(
+    request: GraphQLRequest,
     variables?: TVariables
-  ): Promise<any> {
-    const finalVariables = variables || request.variables || {}
+  ): Promise<GraphQLResponse<TResult>> {
+    const finalVariables = (variables || request.variables || {}) as Record<string, any>
     const result = await this.$__client.query(request.query, finalVariables).toPromise()
-    return this.formatResponse(result)
+    return this.formatResponse<TResult>(result)
   }
 
-  async mutate<TResult = unknown, TVariables = Record<string, any>>(
-    request: { mutation: string; variables?: TVariables },
+  async mutation<TResult = unknown, TVariables = GraphQLVariables>(
+    request: GraphQLRequest,
     variables?: TVariables
-  ): Promise<any> {
-    const finalVariables = variables || request.variables || {}
-    const result = await this.$__client.mutation(request.mutation, finalVariables).toPromise()
-    return this.formatResponse(result)
+  ): Promise<GraphQLResponse<TResult>> {
+    const finalVariables = (variables || request.variables || {}) as Record<string, any>
+    // Support both query and mutation properties for backward compatibility
+    const mutationString = (request as any).mutation || request.query
+    const result = await this.$__client.mutation(mutationString, finalVariables).toPromise()
+    return this.formatResponse<TResult>(result)
   }
 
-  async mutation<TResult = unknown, TVariables = Record<string, any>>(
-    request: { mutation: string; variables?: TVariables },
+  // Alias for mutation() to match JS SDK interface
+  async mutate<TResult = unknown, TVariables = GraphQLVariables>(
+    request: GraphQLRequest,
     variables?: TVariables
-  ): Promise<any> {
-    return this.mutate(request, variables)
+  ): Promise<GraphQLResponse<TResult>> {
+    return this.mutation<TResult, TVariables>(request, variables)
+  }
+
+  async *subscription<TResult = unknown, TVariables = GraphQLVariables>(
+    request: GraphQLRequest,
+    variables?: TVariables
+  ): AsyncIterableIterator<GraphQLResponse<TResult>> {
+    const finalVariables = (variables || request.variables || {}) as Record<string, any>
+
+    // Create subscription stream
+    const subscription = this.$__client.subscription(request.query, finalVariables)
+
+    // Convert wonka stream to async iterator
+    const results: GraphQLResponse<TResult>[] = []
+    const { unsubscribe } = pipe(
+      subscription,
+      subscribe((result) => {
+        results.push(this.formatResponse<TResult>(result))
+      })
+    )
+
+    try {
+      while (true) {
+        if (results.length > 0) {
+          yield results.shift()!
+        }
+        // Small delay to prevent busy waiting
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+    } finally {
+      unsubscribe()
+    }
   }
 
   subscribe(
@@ -203,12 +241,12 @@ export default class GraphQLClient implements IGraphQLClient {
     }
   }
 
-  private formatResponse(result: any): any {
-    // Match old Apollo response format
+  private formatResponse<T>(result: any): GraphQLResponse<T> {
+    // Match JS SDK (UrqlClientWrapper) response format exactly
     return {
       data: result.data,
       errors: result.error ? [result.error] : undefined
-    }
+    } as GraphQLResponse<T>
   }
 
   unsubscribe(operationName: string): void {
@@ -220,7 +258,7 @@ export default class GraphQLClient implements IGraphQLClient {
   }
 
   unsubscribeAll(): void {
-    this.$__subscriptionManager.forEach((subscription, operationName) => {
+    this.$__subscriptionManager.forEach((_subscription, operationName) => {
       this.unsubscribe(operationName)
     })
   }

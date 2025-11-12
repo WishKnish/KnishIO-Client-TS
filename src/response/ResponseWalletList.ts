@@ -159,7 +159,7 @@ export default class ResponseWalletList extends Response {
    * Returns response payload
    * Matches JavaScript SDK payload method exactly
    */
-  payload(): Wallet[] | null {
+  override payload(): Wallet[] | null {
     return this.getWallets()
   }
 }

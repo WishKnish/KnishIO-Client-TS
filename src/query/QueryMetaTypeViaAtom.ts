@@ -48,7 +48,8 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import Query from './Query'
 import ResponseMetaTypeViaAtom from '../response/ResponseMetaTypeViaAtom'
-import type { UrqlClientWrapper } from '../client/GraphQLClient'
+import { gql } from '@urql/core'
+import type { GraphQLClient } from '../types/graphql'
 import type KnishIOClient from '../KnishIOClient'
 
 /**
@@ -60,10 +61,10 @@ export default class QueryMetaTypeViaAtom extends Query {
    * Create new QueryMetaTypeViaAtom instance
    * Matches JavaScript SDK constructor signature exactly
    */
-  constructor(graphQLClient: UrqlClientWrapper, knishIOClient: KnishIOClient) {
+  constructor(graphQLClient: GraphQLClient, knishIOClient: KnishIOClient) {
     super(graphQLClient, knishIOClient)
 
-    this.$__query = `query ($metaTypes: [String!], $metaIds: [String!], $values: [String!], $keys: [String!], $latest: Boolean, $filter: [MetaFilter!], $queryArgs: QueryArgs, $countBy: String, $atomValues: [String!], $cellSlugs: [String!] ) {
+    this.$__query = gql`query ($metaTypes: [String!], $metaIds: [String!], $values: [String!], $keys: [String!], $latest: Boolean, $filter: [MetaFilter!], $queryArgs: QueryArgs, $countBy: String, $atomValues: [String!], $cellSlugs: [String!] ) {
       MetaTypeViaAtom(
         metaTypes: $metaTypes
         metaIds: $metaIds

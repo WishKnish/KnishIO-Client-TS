@@ -48,6 +48,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import Mutation from './Mutation'
 import ResponseProposeMolecule from '../response/ResponseProposeMolecule'
+import { gql } from '@urql/core'
 import type GraphQLClient from '../libraries/GraphQLClient'
 import type KnishIOClient from '../KnishIOClient'
 import type Molecule from '../core/Molecule'
@@ -68,7 +69,7 @@ export default abstract class MutationProposeMolecule extends Mutation {
 
     this.$__molecule = molecule
     this.$__remainderWallet = null
-    this.$__query = `
+    this.$__query = gql`
       mutation($molecule: MoleculeInput!) {
         ProposeMolecule(molecule: $molecule) {
           molecularHash,

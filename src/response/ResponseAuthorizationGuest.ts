@@ -89,7 +89,7 @@ export default class ResponseAuthorizationGuest extends Response {
   /**
    * Returns authorization data
    */
-  payload(): any {
+  override payload(): any {
     return this.data()
   }
 

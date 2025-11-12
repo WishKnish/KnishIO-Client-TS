@@ -5,17 +5,12 @@
   functional programming support, and enhanced error handling.
 */
 
-import { z } from 'zod'
-import { 
-  UniversalResponse, 
-  EnhancedResponse, 
-  ValidationResult, 
-  ResponseError, 
+import {
+  EnhancedResponse,
+  ValidationResult,
+  ResponseError,
   ResponseMetadata,
-  ResponseErrorSchema,
-  ValidationResultSchema,
-  isSuccessResponse,
-  isErrorResponse
+  ValidationResultSchema
 } from '@/types/response'
 
 /**
@@ -93,10 +88,10 @@ export class StandardResponse<T> implements EnhancedResponse<T> {
         const mappedValue = mapper(this._payload)
         return new StandardResponse(true, mappedValue, null, this._rawData, this._metadata)
       } catch (error) {
-        return new StandardResponse(false, null, `Mapping failed: ${error instanceof Error ? error.message : String(error)}`, this._rawData, this._metadata)
+        return new StandardResponse<U>(false, null as any, `Mapping failed: ${error instanceof Error ? error.message : String(error)}`, this._rawData, this._metadata)
       }
     } else {
-      return new StandardResponse(false, null, this._errorMessage, this._rawData, this._metadata)
+      return new StandardResponse<U>(false, null as any, this._errorMessage, this._rawData, this._metadata)
     }
   }
 
@@ -105,10 +100,10 @@ export class StandardResponse<T> implements EnhancedResponse<T> {
       try {
         return mapper(this._payload)
       } catch (error) {
-        return new StandardResponse(false, null, `FlatMap failed: ${error instanceof Error ? error.message : String(error)}`, this._rawData, this._metadata)
+        return new StandardResponse<U>(false, null as any, `FlatMap failed: ${error instanceof Error ? error.message : String(error)}`, this._rawData, this._metadata)
       }
     } else {
-      return new StandardResponse(false, null, this._errorMessage, this._rawData, this._metadata)
+      return new StandardResponse<U>(false, null as any, this._errorMessage, this._rawData, this._metadata)
     }
   }
 
@@ -118,10 +113,10 @@ export class StandardResponse<T> implements EnhancedResponse<T> {
         if (predicate(this._payload)) {
           return this
         } else {
-          return new StandardResponse(false, null, 'Filter predicate failed', this._rawData, this._metadata)
+          return new StandardResponse<T>(false, null as any, 'Filter predicate failed', this._rawData, this._metadata)
         }
       } catch (error) {
-        return new StandardResponse(false, null, `Filter failed: ${error instanceof Error ? error.message : String(error)}`, this._rawData, this._metadata)
+        return new StandardResponse<T>(false, null as any, `Filter failed: ${error instanceof Error ? error.message : String(error)}`, this._rawData, this._metadata)
       }
     } else {
       return this
@@ -187,17 +182,17 @@ export class StandardResponse<T> implements EnhancedResponse<T> {
 
   static failure<T>(errorMessage: string | ResponseError, rawData?: any, metadata?: Partial<ResponseMetadata>): StandardResponse<T> {
     const message = typeof errorMessage === 'string' ? errorMessage : errorMessage.message
-    return new StandardResponse(false, null, message, rawData, metadata)
+    return new StandardResponse<T>(false, null as any, message, rawData, metadata)
   }
 
   static fromValidationResult<T>(result: ValidationResult<T>, rawData?: any, metadata?: Partial<ResponseMetadata>): StandardResponse<T> {
     if (result.success && result.data !== undefined) {
-      return new StandardResponse(true, result.data, null, rawData, {
+      return new StandardResponse<T>(true, result.data, null, rawData, {
         ...metadata,
         warnings: result.warnings
       })
     } else {
-      return new StandardResponse(false, null, result.error?.message || 'Validation failed', rawData, {
+      return new StandardResponse<T>(false, null as any, result.error?.message || 'Validation failed', rawData, {
         ...metadata,
         error: result.error
       })
@@ -225,7 +220,7 @@ export class StandardResponse<T> implements EnhancedResponse<T> {
   // Enhanced response validation
   validate(): ValidationResult<T> {
     try {
-      const validationResult = ValidationResultSchema.parse(this.toValidationResult())
+      ValidationResultSchema.parse(this.toValidationResult())
       return {
         success: true,
         data: this._payload as T,
@@ -247,27 +242,27 @@ export class StandardResponse<T> implements EnhancedResponse<T> {
 export class ResponseFactory {
   
   static createSuccessResponse<T>(
-    payload: T, 
+    payload: T,
     operation: string,
     rawData?: any,
     duration?: number
   ): StandardResponse<T> {
     return StandardResponse.success(payload, rawData, {
       operation,
-      duration,
+      ...(duration !== undefined ? { duration } : {}),
       timestamp: new Date().toISOString()
     })
   }
 
   static createErrorResponse<T>(
     errorMessage: string,
-    operation: string, 
+    operation: string,
     rawData?: any,
     duration?: number
   ): StandardResponse<T> {
     return StandardResponse.failure(errorMessage, rawData, {
       operation,
-      duration,
+      ...(duration !== undefined ? { duration } : {}),
       timestamp: new Date().toISOString()
     })
   }

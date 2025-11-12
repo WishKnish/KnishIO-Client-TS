@@ -110,9 +110,11 @@ export function shake256(input: string, outputLength: number): string {
  */
 export function shake256Enhanced(options: SHAKE256Options): string {
   const { input, outputLength, encoding = 'hex' } = options
-  
-  const sponge = new JsSHA('SHAKE256', typeof input === 'string' ? 'TEXT' : 'UINT8ARRAY')
-  sponge.update(input)
+
+  // Always treat input as string for SHAKE256
+  const inputStr = typeof input === 'string' ? input : Array.from(input).map(b => String.fromCharCode(b)).join('')
+  const sponge = new JsSHA('SHAKE256', 'TEXT')
+  sponge.update(inputStr)
   
   // outputLength is in BITS consistently across all encodings
   switch (encoding) {
@@ -136,7 +138,7 @@ export function shake256Enhanced(options: SHAKE256Options): string {
  * If seed provided: uses SHAKE256 to generate deterministic secret
  * If no seed: uses cryptographically secure random string
  */
-export function generateSecret(seed: string | null = null, length = CRYPTO_CONSTANTS.SECRET_LENGTH): string {
+export function generateSecret(seed: string | null = null, length: number = CRYPTO_CONSTANTS.SECRET_LENGTH): string {
   if (seed) {
     // Deterministic generation using SHAKE256 - MUST match JS SDK
     const sponge = new JsSHA('SHAKE256', 'TEXT')
@@ -221,10 +223,10 @@ export function generatePosition(): Position {
  * Enhanced position generation with options
  */
 export function generatePositionEnhanced(options: PositionGenerationOptions = {}): Position {
-  const { 
+  const {
     entropy = null,
-    algorithm = 'SHAKE256',
-    length = CRYPTO_CONSTANTS.POSITION_LENGTH 
+    algorithm: _algorithm = 'SHAKE256',
+    length = CRYPTO_CONSTANTS.POSITION_LENGTH
   } = options
 
   if (entropy) {
@@ -499,21 +501,21 @@ export function charsetBaseConvert(
   fromCharset: string,
   toCharset: string
 ): string {
-  if (input === '') return toCharset[0]
-  
+  if (input === '') return toCharset[0]!
+
   // Convert input from source base to decimal using BigInt for precision
   let decimal = 0n
   for (let i = 0; i < input.length; i++) {
-    const char = input[i]
+    const char = input[i]!
     const value = BigInt(fromCharset.indexOf(char))
     if (value === -1n) {
       throw new Error(`Invalid character '${char}' for source base ${fromBase}`)
     }
     decimal = decimal * BigInt(fromBase) + value
   }
-  
+
   // Convert decimal to target base
-  if (decimal === 0n) return toCharset[0]
+  if (decimal === 0n) return toCharset[0]!
   
   let result = ''
   while (decimal > 0n) {
@@ -557,9 +559,9 @@ export function enumerateMolecularHash(hash: string): number[] {
   const hashList = hash.toLowerCase().split('')
   
   for (let index = 0; index < hashList.length; index++) {
-    const symbol = hashList[index]
+    const symbol = hashList[index]!
     if (typeof mapped[symbol] !== 'undefined') {
-      target[index] = mapped[symbol]
+      target[index] = mapped[symbol]!
     } else {
       throw new Error(`Invalid character '${symbol}' in molecular hash`)
     }
@@ -581,19 +583,20 @@ export function normalizeMolecularHash(mappedHashArray: number[]): number[] {
   
   while (total !== 0) {
     for (let index = 0; index < normalized.length; index++) {
-      const condition = totalCondition 
-        ? normalized[index] < 8 
-        : normalized[index] > -8
-      
+      const value = normalized[index]!
+      const condition = totalCondition
+        ? value < 8
+        : value > -8
+
       if (condition) {
         if (totalCondition) {
-          normalized[index]++
+          normalized[index] = value + 1
           total++
         } else {
-          normalized[index]--
+          normalized[index] = value - 1
           total--
         }
-        
+
         if (total === 0) break
       }
     }
@@ -634,8 +637,8 @@ export function generateOTSSignature(privateKey: string, molecularHash: string):
     // Step 3: Generate signature fragments
     let signatureFragments = ''
     for (let index = 0; index < keyChunks.length; index++) {
-      let workingChunk = keyChunks[index]
-      
+      let workingChunk = keyChunks[index]!
+
       // Hash (8 - normalized[index]) times for signature generation
       const iterations = 8 - (normalized[index] || 0)
       for (let j = 0; j < iterations; j++) {
@@ -689,8 +692,8 @@ export function verifyOTSSignature(
     // Step 4: Process each chunk for verification
     let keyFragments = ''
     for (let index = 0; index < otsChunks.length; index++) {
-      let workingChunk = otsChunks[index]
-      
+      let workingChunk = otsChunks[index]!
+
       // Hash (8 + normalized[index]) times for verification
       const iterations = 8 + (normalized[index] || 0)
       for (let j = 0; j < iterations; j++) {

@@ -5,7 +5,7 @@ export default defineConfig({
   format: ['esm', 'cjs', 'iife'],
   target: 'es2022',
   outDir: 'dist',
-  dts: false,
+  dts: true,
   sourcemap: true,
   clean: true,
   splitting: false,
