@@ -1,6 +1,6 @@
 {
   "name": "@wishknish/knishio-client-ts",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "productName": "Knish.IO TypeScript SDK Client",
   "description": "TypeScript implementation of the Knish.IO SDK to consume Knish.IO GraphQL APIs with enhanced type safety.",
   "license": "GPL-3.0-or-later",
@@ -20,16 +20,21 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "browser": "./dist/client.iife.js",
+  "browser": "./dist/index.iife.js",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "browser": "./dist/client.iife.js",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "browser": "./dist/index.iife.js",
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "default": "./dist/index.js"
     },
-    "./src": "./src/index.ts",
-    "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "keywords": [
