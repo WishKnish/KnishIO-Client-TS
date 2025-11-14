@@ -95,6 +95,17 @@ export default class Response implements UniversalResponse<any> {
       throw new InvalidResponseException()
     }
 
+    // Check for GraphQL errors array
+    if (this.$__response.errors && Array.isArray(this.$__response.errors) && this.$__response.errors.length > 0) {
+      const errorMessage = this.$__response.errors[0].message || 'Unknown GraphQL error'
+
+      if (errorMessage.includes('Unauthenticated')) {
+        throw new UnauthenticatedException('Unauthenticated request')
+      }
+
+      throw new InvalidResponseException(`GraphQL Error: ${errorMessage}`)
+    }
+
     this.init()
   }
 
@@ -113,9 +124,14 @@ export default class Response implements UniversalResponse<any> {
       return this.response()
     }
 
+    // Check if response has data field
+    if (!this.response().data) {
+      throw new InvalidResponseException('Response has no data field')
+    }
+
     // Check key & return custom data from the response
     if (!Dot.has(this.response(), this.dataKey)) {
-      throw new InvalidResponseException()
+      throw new InvalidResponseException(`Missing expected field: ${this.dataKey}`)
     }
 
     return Dot.get(this.response(), this.dataKey)

@@ -849,7 +849,7 @@ export default class KnishIOClient {
     queryArgs = null,
     count = null,
     countBy = null,
-    throughAtom = null,
+    throughAtom = true,
     values = null,
     keys = null,
     atomValues = null
@@ -872,47 +872,38 @@ export default class KnishIOClient {
     this.log('info', `KnishIOClient::queryMeta() - Querying metaType: ${metaType}, metaId: ${metaId}...`)
 
     let query: Query
+    let variables: Record<string, any>
 
-    if (throughAtom === true) {
+    if (throughAtom) {
       query = this.createQuery(QueryMetaTypeViaAtom)
+      variables = QueryMetaTypeViaAtom.createVariables({
+        metaType,
+        metaId,
+        key,
+        value,
+        latest,
+        filter,
+        queryArgs,
+        countBy,
+        values,
+        keys,
+        atomValues,
+        cellSlug: this.getCellSlug()
+      })
     } else {
       query = this.createQuery(QueryMetaType)
-    }
-
-    const variables: Record<string, any> = {
-      metaType: metaType.toUpperCase(),
-      metaId
-    }
-
-    if (filter !== null) {
-      variables.filter = filter
-    }
-    if (latest !== null) {
-      variables.latest = latest
-    }
-    if (key !== null) {
-      variables.key = key
-    }
-    if (value !== null) {
-      variables.value = value
-    }
-    if (queryArgs !== null) {
-      variables.queryArgs = queryArgs
-    }
-    if (count !== null) {
-      variables.count = count
-    }
-    if (countBy !== null) {
-      variables.countBy = countBy
-    }
-    if (values !== null) {
-      variables.values = values
-    }
-    if (keys !== null) {
-      variables.keys = keys
-    }
-    if (atomValues !== null) {
-      variables.atomValues = atomValues
+      variables = QueryMetaType.createVariables({
+        metaType,
+        metaId,
+        key,
+        value,
+        latest,
+        filter,
+        queryArgs,
+        count,
+        countBy,
+        cellSlug: this.getCellSlug()
+      })
     }
 
     return this.executeQuery(query, variables) as Promise<Response>
@@ -1012,38 +1003,39 @@ export default class KnishIOClient {
     latest?: boolean | null
     queryArgs?: Record<string, any> | null
   } = {}): Promise<Response> {
+    this.log('info', 'KnishIOClient::queryAtom() - Querying atom instances')
+
     const query = this.createQuery(QueryAtom)
 
-    const variables: Record<string, any> = {}
-
-    // Add all non-null parameters to variables
-    if (molecularHashes !== null) variables.molecularHashes = molecularHashes
-    if (molecularHash !== null) variables.molecularHash = molecularHash
-    if (bundleHashes !== null) variables.bundleHashes = bundleHashes
-    if (bundleHash !== null) variables.bundleHash = bundleHash
-    if (positions !== null) variables.positions = positions
-    if (position !== null) variables.position = position
-    if (walletAddresses !== null) variables.walletAddresses = walletAddresses
-    if (walletAddress !== null) variables.walletAddress = walletAddress
-    if (isotopes !== null) variables.isotopes = isotopes
-    if (isotope !== null) variables.isotope = isotope
-    if (tokenSlugs !== null) variables.tokenSlugs = tokenSlugs
-    if (tokenSlug !== null) variables.tokenSlug = tokenSlug
-    if (cellSlugs !== null) variables.cellSlugs = cellSlugs
-    if (cellSlug !== null) variables.cellSlug = cellSlug
-    if (batchIds !== null) variables.batchIds = batchIds
-    if (batchId !== null) variables.batchId = batchId
-    if (values !== null) variables.values = values
-    if (value !== null) variables.value = value
-    if (metaTypes !== null) variables.metaTypes = metaTypes
-    if (metaType !== null) variables.metaType = metaType
-    if (metaIds !== null) variables.metaIds = metaIds
-    if (metaId !== null) variables.metaId = metaId
-    if (indexes !== null) variables.indexes = indexes
-    if (index !== null) variables.index = index
-    if (filter !== null) variables.filter = filter
-    if (latest !== null) variables.latest = latest
-    if (queryArgs !== null) variables.queryArgs = queryArgs
+    const variables = QueryAtom.createVariables({
+      molecularHashes,
+      molecularHash,
+      bundleHashes,
+      bundleHash,
+      positions,
+      position,
+      walletAddresses,
+      walletAddress,
+      isotopes,
+      isotope,
+      tokenSlugs,
+      tokenSlug,
+      cellSlugs,
+      cellSlug,
+      batchIds,
+      batchId,
+      values,
+      value,
+      metaTypes,
+      metaType,
+      metaIds,
+      metaId,
+      indexes,
+      index,
+      filter,
+      latest,
+      queryArgs
+    })
 
     return this.executeQuery(query, variables) as Promise<Response>
   }

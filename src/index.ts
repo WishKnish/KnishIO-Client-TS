@@ -479,16 +479,7 @@ export const DevUtils = process.env.NODE_ENV === 'development' ? {
 // COMPATIBILITY WITH JAVASCRIPT SDK
 // =============================================================================
 
-/**
- * Legacy export names for compatibility with JavaScript SDK
- * These maintain the exact same naming convention
- */
-export {
-  // Core exports (matching JS SDK exactly)
-  shake256 as default, // The JS SDK doesn't export a default, but this maintains compatibility
-}
-
-// Maintain exact export structure as JS SDK index.js
+// Maintain exact export structure as JS SDK index.js (named exports only)
 export const KnishIO = {
   shake256,
   generateSecret,

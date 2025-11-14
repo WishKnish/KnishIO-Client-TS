@@ -151,12 +151,12 @@ export default class Query {
   /**
    * Executes the Query and returns a Response
    */
-  async execute({ 
-    variables = {}, 
-    context = {} 
-  }: { 
-    variables?: Record<string, any>
-    context?: Record<string, any> 
+  async execute({
+    variables = null,
+    context = {}
+  }: {
+    variables?: Record<string, any> | null
+    context?: Record<string, any>
   } = {}): Promise<Response | null> {
     this.$__request = this.createQuery({ variables })
 

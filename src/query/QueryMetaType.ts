@@ -114,7 +114,7 @@ export default class QueryMetaType extends Query {
     latest?: boolean | null
     filter?: any | null
     queryArgs?: any | null
-    count?: string | null
+    count?: string | number | null
     countBy?: string | null
     cellSlug?: string | null
   } = {}): Record<string, any> {

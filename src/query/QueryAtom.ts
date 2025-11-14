@@ -156,33 +156,33 @@ export default class QueryAtom extends Query {
     latest,
     queryArgs
   }: {
-    molecularHashes?: string[]
-    molecularHash?: string
-    bundleHashes?: string[]
-    bundleHash?: string
-    positions?: string[]
-    position?: string
-    walletAddresses?: string[]
-    walletAddress?: string
-    isotopes?: string[]
-    isotope?: string
-    tokenSlugs?: string[]
-    tokenSlug?: string
-    cellSlugs?: string[]
-    cellSlug?: string
-    batchIds?: string[]
-    batchId?: string
-    values?: string[]
-    value?: string | number
-    metaTypes?: string[]
-    metaType?: string
-    metaIds?: string[]
-    metaId?: string
-    indexes?: number[]
-    index?: number
-    filter?: object[]
-    latest?: boolean
-    queryArgs?: object
+    molecularHashes?: string[] | null
+    molecularHash?: string | null
+    bundleHashes?: string[] | null
+    bundleHash?: string | null
+    positions?: string[] | null
+    position?: string | null
+    walletAddresses?: string[] | null
+    walletAddress?: string | null
+    isotopes?: string[] | null
+    isotope?: string | null
+    tokenSlugs?: string[] | null
+    tokenSlug?: string | null
+    cellSlugs?: string[] | null
+    cellSlug?: string | null
+    batchIds?: string[] | null
+    batchId?: string | null
+    values?: string[] | null
+    value?: string | number | null
+    metaTypes?: string[] | null
+    metaType?: string | null
+    metaIds?: string[] | null
+    metaId?: string | null
+    indexes?: number[] | null
+    index?: number | null
+    filter?: string | object[] | null
+    latest?: boolean | null
+    queryArgs?: object | null
   }): Record<string, any> {
     if (molecularHash) {
       molecularHashes = molecularHashes || []
