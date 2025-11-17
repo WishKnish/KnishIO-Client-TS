@@ -249,6 +249,17 @@ export const RequestTokensParamsSchema = z.object({
 }).strict()
 
 // =============================================================================
+// FILTER SCHEMAS
+// =============================================================================
+
+export const MetaFilterSchema = z.object({
+  key: z.string(),
+  value: z.string(),
+  comparison: z.string().optional(),
+  criterion: z.string().optional()
+}).strict()
+
+// =============================================================================
 // QUERY PARAMETER SCHEMAS
 // =============================================================================
 
@@ -265,7 +276,7 @@ export const MetaQueryParamsSchema = z.object({
   key: z.union([z.string(), z.null()]).optional(),
   value: z.union([z.string(), z.null()]).optional(),
   latest: z.union([z.boolean(), z.null()]).optional(),
-  filter: z.union([z.string(), z.null()]).optional(),
+  filter: z.union([z.array(MetaFilterSchema), z.null()]).optional(),
   queryArgs: z.union([z.record(z.unknown()), z.null()]).optional(),
   count: z.union([z.number().int().min(1), z.null()]).optional(),
   countBy: z.union([z.string(), z.null()]).optional(),

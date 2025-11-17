@@ -285,6 +285,21 @@ export interface RequestTokensParams {
 }
 
 // =============================================================================
+// FILTER TYPES
+// =============================================================================
+
+/**
+ * MetaFilter interface for filtering meta queries
+ * Matches the GraphQL MetaFilter input type from the server
+ */
+export interface MetaFilter {
+  key: string
+  value: string
+  comparison?: string  // '=', '<', '>', '<=', '>=', '!='
+  criterion?: string
+}
+
+// =============================================================================
 // QUERY PARAMETER TYPES
 // =============================================================================
 
@@ -301,7 +316,7 @@ export interface MetaQueryParams {
   key?: string | null
   value?: string | null
   latest?: boolean | null
-  filter?: string | null
+  filter?: MetaFilter[] | null
   queryArgs?: Record<string, unknown> | null
   count?: number | null
   countBy?: string | null

@@ -121,7 +121,8 @@ import type {
   CellSlug,
   MetaType,
   MetaId,
-  BatchId
+  BatchId,
+  MetaFilter
 } from '@/types'
 
 /**
@@ -860,7 +861,7 @@ export default class KnishIOClient {
     value?: string | null
     latest?: boolean | null
     fields?: string[] | null
-    filter?: string | null
+    filter?: MetaFilter[] | null
     queryArgs?: Record<string, any> | null
     count?: number | null
     countBy?: string | null
@@ -999,7 +1000,7 @@ export default class KnishIOClient {
     metaId?: string | null
     indexes?: number[] | null
     index?: number | null
-    filter?: string | null
+    filter?: MetaFilter[] | null
     latest?: boolean | null
     queryArgs?: Record<string, any> | null
   } = {}): Promise<Response> {

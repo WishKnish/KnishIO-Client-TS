@@ -126,7 +126,7 @@ export default class QueryMetaTypeViaAtom extends Query {
     values?: string[] | null
     atomValues?: string[] | null
     latest?: boolean | null
-    filter?: string | any[] | null
+    filter?: any[] | null
     queryArgs?: any | null
     countBy?: string | null
     cellSlug?: string | string[] | null

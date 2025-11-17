@@ -58,7 +58,8 @@ import type {
   MetaId,
   CellSlug,
   MetaData,
-  BaseResponse
+  BaseResponse,
+  MetaFilter
 } from './index'
 
 // =============================================================================
@@ -237,7 +238,7 @@ export interface MetaQueryOptions {
   key?: string | null
   value?: string | null
   latest?: boolean | null
-  filter?: string | null
+  filter?: MetaFilter[] | null
   queryArgs?: Record<string, unknown> | null
   count?: number | null
   countBy?: string | null

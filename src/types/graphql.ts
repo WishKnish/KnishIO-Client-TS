@@ -59,7 +59,8 @@ import type {
   MetaId,
   CellSlug,
   AtomIsotope,
-  MetaData
+  MetaData,
+  MetaFilter
 } from './index'
 
 // =============================================================================
@@ -173,7 +174,7 @@ export interface QueryMetaTypeVariables {
   key?: string | null
   value?: string | null
   latest?: boolean | null
-  filter?: string | null
+  filter?: MetaFilter[] | null
   queryArgs?: Record<string, unknown> | null
   count?: number | null
   countBy?: string | null

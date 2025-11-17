@@ -58,8 +58,7 @@ import { pipe, subscribe } from 'wonka'
 import type {
   GraphQLClient as IGraphQLClient,
   GraphQLRequest,
-  GraphQLResponse,
-  GraphQLVariables
+  GraphQLResponse
 } from '@/types'
 import type Wallet from '@/core/Wallet'
 
@@ -157,42 +156,38 @@ export default class GraphQLClient implements IGraphQLClient {
     })
   }
 
-  async query<TResult = unknown, TVariables = GraphQLVariables>(
-    request: GraphQLRequest,
-    variables?: TVariables
+  async query<TResult = unknown>(
+    request: GraphQLRequest
   ): Promise<GraphQLResponse<TResult>> {
-    const finalVariables = (variables || request.variables || {}) as Record<string, any>
-    const result = await this.$__client.query(request.query, finalVariables).toPromise()
+    const { query, variables } = request
+    const result = await this.$__client.query(query, variables || {}).toPromise()
     return this.formatResponse<TResult>(result)
   }
 
-  async mutation<TResult = unknown, TVariables = GraphQLVariables>(
-    request: GraphQLRequest,
-    variables?: TVariables
+  async mutation<TResult = unknown>(
+    request: GraphQLRequest
   ): Promise<GraphQLResponse<TResult>> {
-    const finalVariables = (variables || request.variables || {}) as Record<string, any>
+    const { query, variables } = request
     // Support both query and mutation properties for backward compatibility
-    const mutationString = (request as any).mutation || request.query
-    const result = await this.$__client.mutation(mutationString, finalVariables).toPromise()
+    const mutationString = (request as any).mutation || query
+    const result = await this.$__client.mutation(mutationString, variables || {}).toPromise()
     return this.formatResponse<TResult>(result)
   }
 
   // Alias for mutation() to match JS SDK interface
-  async mutate<TResult = unknown, TVariables = GraphQLVariables>(
-    request: GraphQLRequest,
-    variables?: TVariables
+  async mutate<TResult = unknown>(
+    request: GraphQLRequest
   ): Promise<GraphQLResponse<TResult>> {
-    return this.mutation<TResult, TVariables>(request, variables)
+    return this.mutation<TResult>(request)
   }
 
-  async *subscription<TResult = unknown, TVariables = GraphQLVariables>(
-    request: GraphQLRequest,
-    variables?: TVariables
+  async *subscription<TResult = unknown>(
+    request: GraphQLRequest
   ): AsyncIterableIterator<GraphQLResponse<TResult>> {
-    const finalVariables = (variables || request.variables || {}) as Record<string, any>
+    const { query, variables } = request
 
     // Create subscription stream
-    const subscription = this.$__client.subscription(request.query, finalVariables)
+    const subscription = this.$__client.subscription(query, variables || {})
 
     // Convert wonka stream to async iterator
     const results: GraphQLResponse<TResult>[] = []

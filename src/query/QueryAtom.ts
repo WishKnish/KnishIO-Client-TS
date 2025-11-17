@@ -180,7 +180,7 @@ export default class QueryAtom extends Query {
     metaId?: string | null
     indexes?: number[] | null
     index?: number | null
-    filter?: string | object[] | null
+    filter?: object[] | null
     latest?: boolean | null
     queryArgs?: object | null
   }): Record<string, any> {

@@ -1,6 +1,6 @@
 {
   "name": "@wishknish/knishio-client-ts",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "productName": "Knish.IO TypeScript SDK Client",
   "description": "TypeScript implementation of the Knish.IO SDK to consume Knish.IO GraphQL APIs with enhanced type safety.",
   "license": "GPL-3.0-or-later",
