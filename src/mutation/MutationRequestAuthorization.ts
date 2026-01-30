@@ -59,9 +59,9 @@ export default class MutationRequestAuthorization extends MutationProposeMolecul
    * Matches JavaScript SDK fillMolecule method exactly
    */
   override fillMolecule({ meta }: { meta: any }): void {
-    (this.$__molecule as any).initAuthorization({ meta });
-    (this.$__molecule as any).sign({});
-    (this.$__molecule as any).check()
+    this.$__molecule.initAuthorization({ meta })
+    this.$__molecule.sign({})
+    this.$__molecule.check()
   }
 
   /**

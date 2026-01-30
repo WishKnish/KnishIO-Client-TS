@@ -73,36 +73,49 @@ export default class ResponseMetaType extends Response {
   }
 
   /**
+   * Extracts payload from metaData object
+   */
+  private extractPayload(metaData: any): any {
+    return {
+      instances: metaData?.instances || [],
+      instanceCount: metaData?.instanceCount || [],
+      paginatorInfo: metaData?.paginatorInfo || {}
+    }
+  }
+
+  /**
    * Returns meta type instance results
-   * Matches JavaScript SDK payload method exactly
+   * Handles various response formats from server:
+   * - Array of results (normal case)
+   * - Single object (filtered queries)
+   * - null/undefined (no results)
+   * - Empty array (no matching data)
    */
   override payload(): any | null {
     const metaTypeData = this.data()
 
-    if (!metaTypeData || metaTypeData.length === 0) {
+    // Handle null/undefined responses
+    if (metaTypeData === null || metaTypeData === undefined) {
       return null
     }
 
-    const response: any = {
-      instances: {},
-      instanceCount: {},
-      paginatorInfo: {}
+    // Handle array response (expected format)
+    if (Array.isArray(metaTypeData)) {
+      if (metaTypeData.length === 0) {
+        // Return empty structure instead of null for empty results
+        return this.extractPayload(null)
+      }
+      // Get last element without mutating the array
+      const metaData = metaTypeData[metaTypeData.length - 1]
+      return this.extractPayload(metaData)
     }
 
-    const metaData = metaTypeData.pop()
-
-    if (metaData.instances) {
-      response.instances = metaData.instances
+    // Handle single object response (some filtered queries)
+    if (typeof metaTypeData === 'object') {
+      return this.extractPayload(metaTypeData)
     }
 
-    if (metaData.instanceCount) {
-      response.instanceCount = metaData.instanceCount
-    }
-
-    if (metaData.paginatorInfo) {
-      response.paginatorInfo = metaData.paginatorInfo
-    }
-
-    return response
+    // Unknown format, return null
+    return null
   }
 }

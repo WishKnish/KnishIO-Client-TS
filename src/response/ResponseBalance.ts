@@ -77,7 +77,10 @@ export default class ResponseBalance extends Response {
    * Matches JavaScript SDK payload() method exactly
    */
   override payload(): Wallet | null {
-    const walletData = this.data() as any
+    const balanceData = this.data() as any
+
+    // Balance query returns an array, get the first result
+    const walletData = Array.isArray(balanceData) ? balanceData[0] : balanceData
 
     if (!walletData || !walletData.bundleHash || !walletData.tokenSlug) {
       return null
@@ -102,7 +105,9 @@ export default class ResponseBalance extends Response {
   }): Wallet {
     let wallet: Wallet
 
-    if (data.position === null || typeof data.position === 'undefined') {
+    // Handle null, undefined, or empty string positions
+    // Empty positions occur for shadow wallets created before this fix
+    if (!data.position) {
       wallet = Wallet.create({
         bundle: data.bundleHash,
         token: data.tokenSlug,

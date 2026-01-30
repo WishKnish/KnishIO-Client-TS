@@ -65,8 +65,8 @@ export default class MutationCreateRule extends MutationProposeMolecule {
   }: {
     metaType: MetaType
     metaId: MetaId
-    rule: Record<string, any>[]
-    policy: Record<string, any>
+    rule: any[] | any  // Accept single object or array
+    policy?: Record<string, any> | null
   }): void {
     (this.$__molecule as any).createRule({
       metaType,

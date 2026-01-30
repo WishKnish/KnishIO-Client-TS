@@ -164,21 +164,33 @@ export default class Wallet {
     batchId?: string | null
     characters?: string | null
   }): Wallet {
-    let position = null
-    
+    let position: string | null = null
+    let address: string | null = null
+
     // No credentials parameters provided?
     if (!secret && !bundle) {
       throw new WalletCredentialException()
     }
-    
+
     // Secret, but no bundle?
     if (secret && !bundle) {
       position = Wallet.generatePosition()
       bundle = generateBundleHash(secret, 'Wallet::create')
     }
-    
+
+    // Bundle but no secret? (Shadow wallet for transfers)
+    // Generate a random position and derive address from it
+    if (bundle && !secret) {
+      position = Wallet.generatePosition()
+      // For shadow wallets, derive address from bundle + position + token
+      // This creates a deterministic but unique address for this recipient position
+      const shadowKeySponge = new JsSHA('SHAKE256', 'TEXT')
+      shadowKeySponge.update(bundle + position + token)
+      address = shadowKeySponge.getHash('HEX', { outputLen: 256 })
+    }
+
     // Wallet initialization
-    return new Wallet({
+    const wallet = new Wallet({
       secret,
       bundle,
       token,
@@ -186,6 +198,13 @@ export default class Wallet {
       batchId,
       characters
     })
+
+    // Set address for shadow wallet (if generated above)
+    if (address && !wallet.address) {
+      wallet.address = address
+    }
+
+    return wallet
   }
 
 

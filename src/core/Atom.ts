@@ -266,7 +266,8 @@ export default class Atom {
       batchId: this.batchId?.toString() || null,
       metaType: this.metaType?.toString() || null,
       metaId: this.metaId?.toString() || null,
-      meta: this.meta.length > 0 ? [...this.meta] : null,
+      // Always return array for meta (server expects Vec<MetaItemInput>, not null)
+      meta: this.meta.length > 0 ? [...this.meta] : [],
       createdAt: this.createdAt,
       index: this.index !== null ? this.index : 0
     }

@@ -49,7 +49,8 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import Decimal from '@/libraries/Decimal'
 import GraphQLClient from '@/libraries/GraphQLClient'
 import {
-  generateBundleHash
+  generateBundleHash,
+  generateSecret
 } from '@/libraries/crypto'
 import Molecule from '@/core/Molecule'
 import Wallet from '@/core/Wallet'
@@ -57,6 +58,7 @@ import AuthToken from '@/AuthToken'
 import Query from '@/query/Query'
 import Mutation from '@/mutation/Mutation'
 import Response from '@/response/Response'
+import ResponseRequestAuthorization from '@/response/ResponseRequestAuthorization'
 
 // 2025 TypeScript: Zod validation integration
 import {
@@ -110,7 +112,8 @@ import {
   UnauthenticatedException,
   TransferBalanceException,
   WalletShadowException,
-  StackableUnitAmountException
+  StackableUnitAmountException,
+  AuthorizationRejectedException
 } from '@/exception'
 
 // Type imports
@@ -615,13 +618,18 @@ export default class KnishIOClient {
   }
 
   /**
-   * Request authorization token
+   * Request authorization token (guest or profile)
+   *
+   * @param secret - User secret for profile auth (null for guest)
+   * @param seed - Seed to generate secret (alternative to secret)
+   * @param cellSlug - Cell slug for scoped access
+   * @param encrypt - Whether to use encryption
    */
   async requestAuthToken({
-    secret: _secret = null,
-    seed: _seed = null,
-    cellSlug: _cellSlug = null,
-    encrypt: _encrypt = false
+    secret = null,
+    seed = null,
+    cellSlug = null,
+    encrypt = false
   }: {
     secret?: string | null
     seed?: string | null
@@ -630,12 +638,46 @@ export default class KnishIOClient {
   } = {}): Promise<Response | null> {
     // SDK versions 2 and below do not utilize an authorization token
     if (this.$__serverSdkVersion < 3) {
-      this.log('warn', 'KnishIOClient::authorize() - Server SDK version does not require an authorization...')
+      this.log('warn', 'KnishIOClient::requestAuthToken() - Server SDK version does not require authorization...')
       return null
     }
 
-    // For now, return null - full implementation would handle authorization
-    return null
+    // Generate a secret from the seed if provided
+    if (secret === null && seed) {
+      secret = generateSecret(seed)
+    }
+
+    // Set cell slug if provided
+    if (cellSlug) {
+      this.setCellSlug(cellSlug)
+    }
+
+    // Auth token response
+    let response: Response
+
+    // Authorized user (profile auth with secret)
+    if (secret) {
+      response = await this.requestProfileAuthToken({
+        secret,
+        encrypt
+      })
+    } else {
+      // Guest auth (no secret)
+      response = await this.requestGuestAuthToken({
+        cellSlug: cellSlug || this.getCellSlug(),
+        encrypt
+      })
+    }
+
+    // Log success
+    if (this.$__authToken) {
+      this.log('info', `KnishIOClient::requestAuthToken() - Successfully retrieved auth token...`)
+    }
+
+    // Handle encryption if needed
+    this.switchEncryption(encrypt)
+
+    return response
   }
 
   /**
@@ -870,7 +912,10 @@ export default class KnishIOClient {
     keys?: string[] | null
     atomValues?: any[] | null
   }): Promise<Response> {
-    this.log('info', `KnishIOClient::queryMeta() - Querying metaType: ${metaType}, metaId: ${metaId}...`)
+    // Normalize metaType to uppercase (consistent with createMeta)
+    const normalizedMetaType = typeof metaType === 'string' ? metaType.toUpperCase() : metaType
+
+    this.log('info', `KnishIOClient::queryMeta() - Querying metaType: ${normalizedMetaType}, metaId: ${metaId}...`)
 
     let query: Query
     let variables: Record<string, any>
@@ -878,7 +923,7 @@ export default class KnishIOClient {
     if (throughAtom) {
       query = this.createQuery(QueryMetaTypeViaAtom)
       variables = QueryMetaTypeViaAtom.createVariables({
-        metaType,
+        metaType: normalizedMetaType,
         metaId,
         key,
         value,
@@ -894,7 +939,7 @@ export default class KnishIOClient {
     } else {
       query = this.createQuery(QueryMetaType)
       variables = QueryMetaType.createVariables({
-        metaType,
+        metaType: normalizedMetaType,
         metaId,
         key,
         value,
@@ -1369,8 +1414,16 @@ export default class KnishIOClient {
       })
     }
 
+    // Create molecule with the source wallet (same pattern as transferToken)
+    const molecule = await this.createMolecule({
+      sourceWallet
+    })
+
     // Create a transfer to null address (burn)
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationTransferTokens })
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationTransferTokens,
+      molecule
+    })
 
     // Create recipient wallet for burn address
     const recipientWallet = new Wallet({
@@ -1764,9 +1817,9 @@ export default class KnishIOClient {
     // Create the mutation (extends Mutation directly, not MutationProposeMolecule)
     const mutation = this.createQuery(MutationActiveSession)
 
-    // Execute with variables
+    // Execute with variables (bundleHash matches GraphQL variable name)
     const response = await this.executeQuery(mutation, {
-      bundle: bundle || this.getBundle(),
+      bundleHash: bundle || this.getBundle(),
       metaType: metaType.toUpperCase(),
       metaId,
       ipAddress,
@@ -1909,6 +1962,7 @@ export default class KnishIOClient {
 
   /**
    * Request profile authentication token
+   * Matches JavaScript SDK requestProfileAuthToken implementation
    */
   async requestProfileAuthToken({
     secret,
@@ -1916,25 +1970,57 @@ export default class KnishIOClient {
   }: {
     secret: string
     encrypt?: boolean
-  }): Promise<Response> {
+  }): Promise<ResponseRequestAuthorization> {
     this.log('info', 'KnishIOClient::requestProfileAuthToken() - Requesting profile auth token...')
 
     // Set the secret
     this.setSecret(secret)
 
-    // Create the molecule mutation
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationRequestAuthorization })
+    // Generate a signing wallet with AUTH token (matching JavaScript SDK)
+    const wallet = new Wallet({
+      secret,
+      token: 'AUTH'
+    })
+
+    // Create a molecule with the AUTH wallet as source
+    const molecule = await this.createMolecule({
+      secret,
+      sourceWallet: wallet
+    })
+
+    // Create the mutation with this specific molecule
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationRequestAuthorization,
+      molecule
+    })
 
     // Initialize the profile auth mutation
-    await mutation.fillMolecule({
+    mutation.fillMolecule({
       meta: { encrypt: encrypt ? 'true' : 'false' }
     })
 
     // Execute the mutation
-    const response = await this.executeQuery(mutation)
+    const response = await this.executeQuery(mutation) as ResponseRequestAuthorization
 
     if (!response) {
       throw new CodeException('Profile auth token request failed')
+    }
+
+    // Did the authorization molecule get accepted?
+    if (response.success()) {
+      // Create & set an auth token from the response data
+      const payload = response.payload()
+      const authToken = AuthToken.create({
+        token: payload.token,
+        expiresAt: Number(payload.time),
+        encrypt: payload.encrypt === 'true' || payload.encrypt === true,
+        pubkey: payload.key
+      }, wallet)
+      this.setAuthToken(authToken)
+    } else {
+      throw new AuthorizationRejectedException(
+        `KnishIOClient::requestProfileAuthToken() - Authorization attempt rejected by ledger. Reason: ${response.reason()}`
+      )
     }
 
     // Handle encryption if needed

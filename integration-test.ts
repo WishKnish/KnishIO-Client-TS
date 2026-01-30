@@ -464,34 +464,38 @@ async function testMetadataOperations(client: any): Promise<boolean> {
       },
       'TypeScript query metadata'
     );
-    
-    const querySuccess = Array.isArray(queryResponse) && queryResponse.length > 0;
-    const retrievedMeta = querySuccess ? queryResponse[0] : null;
-    
+
+    // Response is a Response object - get payload for data
+    const payload = queryResponse?.payload?.();
+    const instances = payload?.instances || [];
+    const querySuccess = instances.length > 0;
+    const retrievedMeta = querySuccess ? instances[0] : null;
+
     logTest('Query metadata via TypeScript client', querySuccess,
       querySuccess ? null : 'No metadata retrieved',
       queryTime
     );
-    
+
     // Validate metadata content with TypeScript safety
     let contentValid = false;
     if (querySuccess && retrievedMeta) {
       const originalKeys = Object.keys(testConfig.metadata);
-      contentValid = originalKeys.every(key => 
-        retrievedMeta.meta?.some?.((m: any) => m.key === key && m.value === testConfig.metadata[key])
+      // metas is an array of {key, value} objects
+      contentValid = originalKeys.every(key =>
+        retrievedMeta.metas?.some?.((m: any) => m.key === key && m.value === testConfig.metadata[key])
       );
     }
-    
+
     logTest('TypeScript metadata content validation', contentValid,
       contentValid ? null : 'Retrieved metadata does not match created metadata'
     );
-    
+
     results.tests.metadata = {
       passed: createSuccess && querySuccess && contentValid,
       molecularHash,
       createTime,
       queryTime,
-      metaCount: queryResponse?.length || 0,
+      metaCount: instances.length,
       contentMatched: contentValid,
       typeSafety: 'enforced'
     };

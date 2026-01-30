@@ -49,6 +49,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import Atom from './Atom'
 import AtomMeta from './AtomMeta'
 import Wallet from './Wallet'
+import Rule from '@/instance/rules/Rule'
 import CheckMolecule from '@/libraries/CheckMolecule'
 import { chunkSubstr, hexToBase64 } from '@/libraries/strings'
 import { generateBundleHash, generateOTSSignature } from '@/libraries/crypto'
@@ -532,6 +533,7 @@ export default class Molecule {
 
   /**
    * Initialize token creation
+   * Matches JavaScript SDK initTokenCreation implementation
    */
   initTokenCreation({
     recipientWallet,
@@ -542,32 +544,39 @@ export default class Molecule {
     amount: number
     meta: any
   }): Molecule {
-    // Create a new token by adding atoms
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for token creation')
+    }
+
+    // Build meta array from object (matching JavaScript SDK AtomMeta)
+    const metaArray: Array<{ key: string; value: string }> = []
+    if (meta) {
+      for (const [key, value] of Object.entries(meta)) {
+        metaArray.push({ key, value: String(value) })
+      }
+    }
+    // Add wallet meta
+    metaArray.push({ key: 'address', value: recipientWallet.address! })
+    metaArray.push({ key: 'position', value: recipientWallet.position! })
+    metaArray.push({ key: 'bundle', value: recipientWallet.bundle! })
+
+    // The primary atom tells the ledger that a certain amount of the new token is being issued
+    // Uses C-isotope with sourceWallet (matching JavaScript SDK)
     this.addAtom(new Atom({
-      isotope: 'T',
-      position: recipientWallet.position!,
-      walletAddress: recipientWallet.address! as any,
-      token: recipientWallet.token,
+      isotope: 'C',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: 'USER', // C-isotope uses USER token
       value: amount,
       metaType: 'token',
-      metaId: recipientWallet.token,
-      meta: meta ? [{ key: 'tokenMeta', value: JSON.stringify(meta) }] : []
+      metaId: recipientWallet.token, // The new token slug
+      meta: metaArray,
+      batchId: recipientWallet.batchId
     }))
-    
-    // Add wallet bundle metadata
-    this.addAtom(new Atom({
-      isotope: 'M',
-      position: recipientWallet.position!,
-      walletAddress: recipientWallet.address! as any,
-      token: recipientWallet.token,
-      metaType: 'walletBundle',
-      metaId: recipientWallet.bundle!,
-      meta: meta ? [{ key: 'tokenMeta', value: JSON.stringify(meta) }] : []
-    }))
-    
+
     // Add ContinuID atom (matching JavaScript SDK)
     this.addContinuIdAtom()
-    
+
     return this
   }
 
@@ -604,6 +613,39 @@ export default class Molecule {
       metaId: walletBundle || null
     }))
     
+    return this
+  }
+
+  /**
+   * Initialize authorization request
+   * Creates U-isotope (authorization) atom for requesting auth token
+   * Matches JavaScript SDK Molecule.initAuthorization
+   */
+  initAuthorization({ meta }: { meta: Record<string, any> }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for authorization')
+    }
+
+    // Create U-isotope atom for authorization
+    const metaArray: Array<{ key: string; value: any }> = []
+    if (meta) {
+      for (const [key, value] of Object.entries(meta)) {
+        metaArray.push({ key, value: String(value) })
+      }
+    }
+
+    // Use sourceWallet's token (should be 'AUTH' when called from requestProfileAuthToken)
+    this.addAtom(new Atom({
+      isotope: 'U',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token,
+      meta: metaArray
+    }))
+
+    // Add ContinuID atom (matching JavaScript SDK)
+    this.addContinuIdAtom()
+
     return this
   }
 
@@ -664,39 +706,170 @@ export default class Molecule {
 
   /**
    * Initialize wallet creation
+   * Uses source wallet for atom properties (matching JavaScript SDK)
+   * The wallet being created is stored in metadata
    */
   initWalletCreation(wallet: Wallet, atomMeta: AtomMeta | null = null): Molecule {
-    // Create wallet creation atom
-    const atom = new Atom({
-      isotope: 'C',
-      position: wallet.position!,
-      walletAddress: wallet.address! as any,
-      token: wallet.token,
-      metaType: 'wallet',
-      metaId: wallet.address!,
-      meta: atomMeta ? atomMeta.get() as any : []
-    })
-    
-    // Add wallet metadata
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for wallet creation')
+    }
+
+    // Build meta with wallet details (matching JavaScript SDK AtomMeta.setMetaWallet)
+    const metaArray: Array<{ key: string; value: string }> = atomMeta ? atomMeta.get() as any : []
+
     if (!atomMeta) {
-      atom.meta.push(
+      // Add wallet metadata to the meta array
+      metaArray.push(
+        { key: 'address', value: wallet.address! },
         { key: 'position', value: wallet.position! },
         { key: 'bundle', value: wallet.bundle! },
         { key: 'token', value: wallet.token },
         { key: 'batchId', value: wallet.batchId || '' },
         { key: 'characters', value: wallet.characters || '' }
       )
-      
+
       if (wallet.pubkey) {
-        atom.meta.push({ key: 'pubkey', value: wallet.pubkey })
+        metaArray.push({ key: 'pubkey', value: wallet.pubkey })
       }
     }
-    
+
+    // Create wallet creation atom using SOURCE wallet (C-isotope uses USER token)
+    // This matches JavaScript SDK: Atom.create({ wallet: this.sourceWallet, ... })
+    const atom = new Atom({
+      isotope: 'C',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: 'USER', // C-isotope requires USER token (like M, T isotopes)
+      metaType: 'wallet',
+      metaId: wallet.address!, // The new wallet's address as metaId
+      meta: metaArray,
+      batchId: wallet.batchId
+    })
+
     this.addAtom(atom)
-    
+
     // Add ContinuID atom (matching JavaScript SDK)
     this.addContinuIdAtom()
-    
+
+    return this
+  }
+
+  /**
+   * Creates atoms for rule definition
+   * Matches JavaScript SDK Molecule.createRule method
+   *
+   * @param metaType - The meta type for the rule
+   * @param metaId - The meta ID for the rule
+   * @param rule - Array of Rule objects or rule data
+   * @param policy - Optional policy object
+   * @return This molecule instance for chaining
+   */
+  createRule({
+    metaType,
+    metaId,
+    rule,
+    policy = {}
+  }: {
+    metaType: string
+    metaId: string
+    rule: Rule[] | any[] | any  // Accept single object or array
+    policy?: Record<string, any>
+  }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for createRule')
+    }
+
+    // Normalize rule to array (accept single object or array)
+    const ruleArray = Array.isArray(rule) ? rule : [rule]
+
+    // Convert rules to objects (matching JavaScript SDK)
+    const rules: Record<string, any>[] = []
+    for (const r of ruleArray) {
+      rules.push(r instanceof Rule ? r : Rule.toObject(r))
+    }
+
+    // Create atom meta with rules
+    const atomMeta = new AtomMeta({
+      rule: JSON.stringify(rules)
+    })
+
+    // Add policies to meta object only if policy exists and has keys (matching JS SDK)
+    if (policy && Object.keys(policy).length > 0) {
+      atomMeta.addPolicy(policy)
+    }
+
+    // Create R-isotope atom for rule
+    this.addAtom(new Atom({
+      isotope: 'R',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token!,
+      metaType,
+      metaId,
+      meta: atomMeta.get() as any
+    }))
+
+    // Add ContinuID atom
+    this.addContinuIdAtom()
+
+    return this
+  }
+
+  /**
+   * Initializes a token request molecule
+   * Matches JavaScript SDK Molecule.initTokenRequest method
+   *
+   * @param token - Token slug to request
+   * @param amount - Amount of tokens to request
+   * @param metaType - Meta type (typically 'walletBundle')
+   * @param metaId - Meta ID (typically recipient bundle hash)
+   * @param meta - Optional additional metadata
+   * @param batchId - Optional batch ID
+   * @return This molecule instance for chaining
+   */
+  initTokenRequest({
+    token,
+    amount,
+    metaType,
+    metaId,
+    meta = {},
+    batchId = null
+  }: {
+    token: string
+    amount: number
+    metaType: string
+    metaId: string
+    meta?: Record<string, any>
+    batchId?: string | null
+  }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for initTokenRequest')
+    }
+
+    // Add token to meta (matching JavaScript SDK)
+    const metaWithToken = { ...meta, token }
+
+    // Mark as local molecule
+    this.local = 1
+
+    // Create T-isotope atom for token request
+    // Note: T-isotope must have token='USER' (from sourceWallet), matching JS SDK
+    // The requested token goes in the meta, not the atom.token field
+    this.addAtom(new Atom({
+      isotope: 'T',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token!,  // Must be 'USER' for T-isotope validation
+      value: amount,
+      metaType,
+      metaId,
+      meta: new AtomMeta(metaWithToken).get() as any,
+      batchId
+    }))
+
+    // Add ContinuID atom
+    this.addContinuIdAtom()
+
     return this
   }
 
