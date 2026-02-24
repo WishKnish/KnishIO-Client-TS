@@ -64,8 +64,8 @@ export default class QueryWalletList extends Query {
   constructor(graphQLClient: GraphQLClient, knishIOClient: KnishIOClient) {
     super(graphQLClient, knishIOClient)
 
-    this.$__query = gql`query( $bundleHash: String, $tokenSlug: String ) {
-      Wallet( bundleHash: $bundleHash, tokenSlug: $tokenSlug ) {
+    this.$__query = gql`query( $bundleHash: String, $token: String ) {
+      Wallet( bundleHash: $bundleHash, token: $token ) {
         address,
         bundleHash,
         token {

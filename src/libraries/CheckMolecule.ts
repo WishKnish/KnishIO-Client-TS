@@ -71,6 +71,7 @@ import Rule from '@/instance/rules/Rule'
 import { base64ToHex, chunkSubstr } from '@/libraries/strings'
 import { shake256 } from '@/libraries/crypto'
 import Dot from '@/libraries/Dot'
+import Molecule from '@/core/Molecule'
 
 // Type definitions for Molecule structure
 interface MoleculeStructure {
@@ -577,5 +578,91 @@ export default class CheckMolecule {
 
     // Looks like we passed all the tests!
     return true
+  }
+
+  /**
+   * Reconstructs a Molecule instance from server-side GraphQL data.
+   * Maps server atom field names to SDK-expected format and parses metasJson.
+   */
+  static fromServerData({
+    molecularHash,
+    bundleHash,
+    cellSlug = null,
+    status = null,
+    createdAt = null,
+    atoms = []
+  }: {
+    molecularHash: string
+    bundleHash: string
+    cellSlug?: string | null
+    status?: string | null
+    createdAt?: string | null
+    atoms?: any[]
+  }): Molecule {
+    const mappedAtoms = atoms.map((serverAtom: any) => {
+      let meta: Array<{ key: string; value: string }> = []
+      if (serverAtom.metasJson) {
+        try {
+          const parsed = JSON.parse(serverAtom.metasJson)
+          if (Array.isArray(parsed)) {
+            meta = parsed
+          } else if (parsed && typeof parsed === 'object') {
+            meta = Object.entries(parsed).map(([key, value]) => ({ key, value: String(value) }))
+          }
+        } catch (e) {
+          meta = []
+        }
+      }
+
+      return {
+        position: serverAtom.position || null,
+        walletAddress: serverAtom.walletAddress || null,
+        isotope: serverAtom.isotope || null,
+        token: serverAtom.tokenSlug || serverAtom.token || null,
+        value: serverAtom.value != null ? String(serverAtom.value) : null,
+        batchId: serverAtom.batchId || null,
+        metaType: serverAtom.metaType || null,
+        metaId: serverAtom.metaId || null,
+        meta,
+        index: serverAtom.index != null ? serverAtom.index : null,
+        otsFragment: serverAtom.otsFragment || null,
+        createdAt: serverAtom.createdAt || null
+      }
+    })
+
+    return Molecule.fromJSON({
+      molecularHash,
+      bundle: bundleHash,
+      cellSlug,
+      status,
+      createdAt,
+      atoms: mappedAtoms
+    })
+  }
+
+  /**
+   * Verifies a molecule reconstructed from server-side GraphQL data.
+   * Returns an object with verification result and any error details.
+   */
+  static verifyFromServerData(moleculeData: any): {
+    molecularHash: string | null
+    verified: boolean
+    error: string | null
+  } {
+    try {
+      const molecule = CheckMolecule.fromServerData(moleculeData)
+      new CheckMolecule(molecule as unknown as MoleculeStructure).verify()
+      return {
+        molecularHash: moleculeData.molecularHash,
+        verified: true,
+        error: null
+      }
+    } catch (error) {
+      return {
+        molecularHash: moleculeData.molecularHash || null,
+        verified: false,
+        error: (error as Error).message || String(error)
+      }
+    }
   }
 }

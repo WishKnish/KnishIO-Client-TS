@@ -76,7 +76,8 @@ export default class Molecule {
   public sourceWallet: Wallet | null
   public remainderWallet: Wallet | null
   public atoms: Atom[]
-  public version: string | null
+  public version: string | null | undefined
+  public parentHashes: string[]
   public local?: number
 
   /**
@@ -106,12 +107,13 @@ export default class Molecule {
     this.bundle = bundle
     this.sourceWallet = sourceWallet
     this.atoms = []
-    
+    this.parentHashes = []
+
     if (version !== null) {
       this.version = String(version)
-    } else {
-      this.version = null
     }
+    // When version is null, this.version stays undefined (matching JS SDK).
+    // JSON.stringify omits undefined properties, so the server won't see a version field.
 
     // Set the remainder wallet for this transaction
     if (remainderWallet || sourceWallet) {
@@ -177,7 +179,7 @@ export default class Molecule {
 
     // Set atom's index
     atom.index = this.generateIndex()
-    atom.version = this.version ? Number(this.version) : 4
+    atom.version = this.version
 
     // Add atom
     this.atoms.push(atom)
@@ -449,7 +451,7 @@ export default class Molecule {
     secureMode?: boolean
   } = {}): any {
     const {
-      includeValidationContext = true,
+      includeValidationContext = false,
       includeOtsFragments = true,
       secureMode = false
     } = options
@@ -460,24 +462,31 @@ export default class Molecule {
         throw new Error('Cannot serialize molecule with secret in secure mode')
       }
 
-      // Core molecule properties (always included)
+      // Core molecule properties (server-compatible fields only)
       const serialized: any = {
         status: this.status,
         molecularHash: this.molecularHash,
         createdAt: this.createdAt,
         cellSlug: this.cellSlug,
-        cellSlugOrigin: this.cellSlugOrigin,
-        version: this.version,
         bundle: this.bundle,
-        
+
         // Serialized atoms array with optional OTS fragments
-        atoms: this.atoms.map(atom => atom.toJSON({ 
-          includeOtsFragments 
+        atoms: this.atoms.map(atom => atom.toJSON({
+          includeOtsFragments
         }))
       }
 
-      // Validation context (essential for cross-SDK validation)
+      // Parent molecular hashes for DAG linkage (only include when non-empty
+      // to maintain backward compatibility with servers that don't support it)
+      if (this.parentHashes && this.parentHashes.length > 0) {
+        serialized.parentHashes = this.parentHashes
+      }
+
+      // Extended context for Rust validator and local validation
       if (includeValidationContext) {
+        serialized.cellSlugOrigin = this.cellSlugOrigin
+        serialized.version = this.version
+
         if (this.sourceWallet) {
           serialized.sourceWallet = {
             address: this.sourceWallet.address,
@@ -934,6 +943,9 @@ export default class Molecule {
         })
       }
 
+      // Reconstruct parent hashes for DAG linkage
+      molecule.parentHashes = Array.isArray(data.parentHashes) ? [...data.parentHashes] : []
+
       // Reconstruct validation context if available and requested
       if (includeValidationContext) {
         if (data.sourceWallet) {
@@ -993,5 +1005,278 @@ export default class Molecule {
    */
   static jsonToObject(json: string): Molecule {
     return Molecule.fromJSON(json)
+  }
+
+  // =============================================================================
+  // ISOTOPE INIT METHODS - MATCHING JAVASCRIPT SDK PARITY
+  // =============================================================================
+
+  /**
+   * Initialize a P-type molecule for peer registration
+   * Matches JavaScript SDK Molecule.initPeering implementation exactly
+   *
+   * @param host - The peer host URL to register
+   * @return This molecule instance for chaining
+   */
+  initPeering({ host }: { host: string }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for peer registration')
+    }
+
+    this.addAtom(new Atom({
+      isotope: 'P',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token,
+      metaType: 'walletBundle',
+      metaId: this.bundle!,
+      meta: new AtomMeta({ peerHost: host }).get() as any
+    }))
+
+    this.addContinuIdAtom()
+
+    return this
+  }
+
+  /**
+   * Initialize an A-type molecule for an append request
+   * Matches JavaScript SDK Molecule.initAppendRequest implementation exactly
+   *
+   * @param metaType - The target MetaType to append to
+   * @param metaId - The target MetaId to append to
+   * @param action - The action to perform
+   * @param meta - Additional metadata
+   * @return This molecule instance for chaining
+   */
+  initAppendRequest({
+    metaType,
+    metaId,
+    action,
+    meta = {}
+  }: {
+    metaType: string
+    metaId: string
+    action: string
+    meta?: Record<string, any>
+  }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for append request')
+    }
+
+    this.addAtom(new Atom({
+      isotope: 'A',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token,
+      metaType,
+      metaId,
+      meta: new AtomMeta({ action, ...meta }).get() as any
+    }))
+
+    this.addContinuIdAtom()
+
+    return this
+  }
+
+  /**
+   * Initialize a deposit buffer operation (B-isotope)
+   * Matches JavaScript SDK Molecule.initDepositBuffer implementation exactly
+   *
+   * @param amount - Amount to deposit into buffer
+   * @param tradeRates - Trade rates for the buffer wallet
+   * @return This molecule instance for chaining
+   */
+  initDepositBuffer({
+    amount,
+    tradeRates
+  }: {
+    amount: number
+    tradeRates?: Record<string, any>
+  }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for buffer deposit')
+    }
+
+    if (this.sourceWallet.balance - amount < 0) {
+      throw new BalanceInsufficientException()
+    }
+
+    // Create a buffer wallet
+    const bufferWallet = Wallet.create({
+      secret: this.secret!,
+      bundle: this.bundle,
+      token: this.sourceWallet.token,
+      batchId: this.sourceWallet.batchId
+    })
+    if (tradeRates) {
+      bufferWallet.tradeRates = tradeRates
+    }
+
+    // Debit full balance from source (V-isotope)
+    this.addAtom(new Atom({
+      isotope: 'V',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token,
+      value: -this.sourceWallet.balance
+    }))
+
+    // Deposit amount to buffer (B-isotope)
+    this.addAtom(new Atom({
+      isotope: 'B',
+      position: bufferWallet.position!,
+      walletAddress: bufferWallet.address! as any,
+      token: bufferWallet.token,
+      value: amount,
+      metaType: 'walletBundle',
+      metaId: this.sourceWallet.bundle!
+    }))
+
+    // Remainder back to source
+    if (!this.remainderWallet) {
+      throw new Error('Remainder wallet required for buffer deposit')
+    }
+    this.addAtom(new Atom({
+      isotope: 'V',
+      position: this.remainderWallet.position!,
+      walletAddress: this.remainderWallet.address! as any,
+      token: this.remainderWallet.token,
+      value: this.sourceWallet.balance - amount,
+      metaType: 'walletBundle',
+      metaId: this.sourceWallet.bundle!
+    }))
+
+    return this
+  }
+
+  /**
+   * Initialize a withdraw buffer operation (B-isotope)
+   * Matches JavaScript SDK Molecule.initWithdrawBuffer implementation exactly
+   *
+   * @param recipients - Map of recipientBundle → amount
+   * @param signingWallet - Optional signing wallet for reconciliation
+   * @return This molecule instance for chaining
+   */
+  initWithdrawBuffer({
+    recipients,
+    signingWallet = null
+  }: {
+    recipients: Record<string, number>
+    signingWallet?: any | null
+  }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for buffer withdrawal')
+    }
+
+    // Calculate total from all recipients
+    let amount = 0
+    for (const recipientAmount of Object.values(recipients || {})) {
+      amount += recipientAmount
+    }
+
+    if (this.sourceWallet.balance - amount < 0) {
+      throw new BalanceInsufficientException()
+    }
+
+    // Set a meta signing position for molecule correct reconciliation
+    const firstAtomMeta = new AtomMeta()
+    if (signingWallet) {
+      firstAtomMeta.setSigningWallet(signingWallet)
+    }
+
+    // Debit full balance from source (B-isotope)
+    this.addAtom(new Atom({
+      isotope: 'B',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token,
+      value: -this.sourceWallet.balance,
+      meta: firstAtomMeta.get() as any,
+      metaType: 'walletBundle',
+      metaId: this.sourceWallet.bundle!
+    }))
+
+    // Add recipient V-atoms
+    for (const [recipientBundle, recipientAmount] of Object.entries(recipients || {})) {
+      this.addAtom(new Atom({
+        isotope: 'V',
+        token: this.sourceWallet.token,
+        value: recipientAmount,
+        batchId: this.sourceWallet.batchId || null,
+        metaType: 'walletBundle',
+        metaId: recipientBundle
+      }))
+    }
+
+    // Remainder back to buffer
+    if (!this.remainderWallet) {
+      throw new Error('Remainder wallet required for buffer withdrawal')
+    }
+    this.addAtom(new Atom({
+      isotope: 'B',
+      position: this.remainderWallet.position!,
+      walletAddress: this.remainderWallet.address! as any,
+      token: this.remainderWallet.token,
+      value: this.sourceWallet.balance - amount,
+      metaType: 'walletBundle',
+      metaId: this.remainderWallet.bundle!
+    }))
+
+    return this
+  }
+
+  /**
+   * Initialize shadow wallet claim
+   * Matches JavaScript SDK Molecule.initShadowWalletClaim implementation exactly
+   *
+   * @param wallet - The shadow wallet to claim
+   * @return This molecule instance for chaining
+   */
+  initShadowWalletClaim(wallet: Wallet): Molecule {
+    const atomMeta = new AtomMeta()
+    atomMeta.setShadowWalletClaim(true)
+    return this.initWalletCreation(wallet, atomMeta)
+  }
+
+  /**
+   * Initialize identifier creation
+   * Matches JavaScript SDK Molecule.initIdentifierCreation implementation exactly
+   *
+   * @param type - Identifier type (phone or email)
+   * @param contact - Phone number or email string
+   * @param code - Verification code
+   * @return This molecule instance for chaining
+   */
+  initIdentifierCreation({
+    type,
+    contact,
+    code
+  }: {
+    type: string
+    contact: string
+    code: string
+  }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for identifier creation')
+    }
+
+    const meta = {
+      code,
+      hash: generateBundleHash(contact.trim(), 'Molecule::initIdentifierCreation')
+    }
+
+    this.addAtom(new Atom({
+      isotope: 'C',
+      position: this.sourceWallet.position!,
+      walletAddress: this.sourceWallet.address! as any,
+      token: this.sourceWallet.token,
+      metaType: 'identifier',
+      metaId: type,
+      meta: new AtomMeta(meta).get() as any
+    }))
+
+    this.addContinuIdAtom()
+
+    return this
   }
 }

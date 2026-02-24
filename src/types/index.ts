@@ -182,7 +182,7 @@ export interface AtomParams {
   otsFragment?: string | null
   index?: number | null
   createdAt?: string | null
-  version?: number | null
+  version?: string | number | null | undefined
 }
 
 export interface WalletParams {

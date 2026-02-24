@@ -124,7 +124,7 @@ export interface AtomMetaData {
 }
 
 export interface AtomCreationParams extends AtomParams {
-  version?: number
+  version?: string | number | null | undefined
 }
 
 export interface AtomHashableData {
@@ -139,6 +139,7 @@ export interface AtomHashableData {
   meta: AtomMetaData[] | null
   createdAt: string
   index: number
+  version?: string | number | null
 }
 
 // =============================================================================
@@ -163,7 +164,7 @@ export default class Atom {
   public otsFragment: string | null
   public index: number | null
   public createdAt: string
-  public version: number
+  public version: string | number | null | undefined
 
   /**
    * Create a new Atom instance
@@ -269,7 +270,8 @@ export default class Atom {
       // Always return array for meta (server expects Vec<MetaItemInput>, not null)
       meta: this.meta.length > 0 ? [...this.meta] : [],
       createdAt: this.createdAt,
-      index: this.index !== null ? this.index : 0
+      index: this.index !== null ? this.index : 0,
+      version: this.version ?? null
     }
   }
 
@@ -287,8 +289,9 @@ export default class Atom {
    */
   public toJSON(options: {
     includeOtsFragments?: boolean
+    includeValidationContext?: boolean
     validateFields?: boolean
-  } = {}): AtomHashableData & { otsFragment?: string | null } {
+  } = {}): Record<string, unknown> {
     const {
       includeOtsFragments = true,
       validateFields = false
@@ -305,10 +308,20 @@ export default class Atom {
         }
       }
 
-      // Core atom properties (always included) - use structured data for JSON
-      const structuredData = this.getStructuredData()
-      const serialized: AtomHashableData & { otsFragment?: string | null } = {
-        ...structuredData
+      // Core atom properties — matches JavaScript SDK Atom.toJSON() exactly
+      const serialized: Record<string, unknown> = {
+        position: this.position || '',
+        walletAddress: this.walletAddress?.toString() || '',
+        isotope: this.isotope,
+        token: this.token?.toString() || '',
+        value: this.value !== null ? this.value.toString() : null,
+        batchId: this.batchId,
+        metaType: this.metaType?.toString() || null,
+        metaId: this.metaId?.toString() || null,
+        meta: this.meta.length > 0 ? [...this.meta] : [],
+        index: this.index !== null ? this.index : 0,
+        createdAt: this.createdAt,
+        version: this.version
       }
 
       // Optional OTS fragments (can be large, so optional)
@@ -363,7 +376,9 @@ export default class Atom {
       I: () => true, // Identity atoms
       R: () => true, // Rule atoms
       B: () => true, // Buffer atoms
-      F: () => true  // Fuse atoms
+      F: () => true, // Fuse atoms
+      P: () => true, // Peer atoms
+      A: () => Boolean(this.metaType && this.metaId) // Append atoms must have metaType and metaId
     })
   }
 

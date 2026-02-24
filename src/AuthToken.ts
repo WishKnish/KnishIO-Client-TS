@@ -163,11 +163,17 @@ export default class AuthToken {
   }
 
   /**
+   * Get expire interval in milliseconds (matching JS SDK pattern)
+   */
+  getExpireInterval(): number {
+    return (this.$__expiresAt * 1000) - Date.now()
+  }
+
+  /**
    * Check if token is expired
    */
   isExpired(): boolean {
-    const now = Math.floor(Date.now() / 1000)
-    return now >= this.$__expiresAt
+    return !this.$__expiresAt || this.getExpireInterval() < 0
   }
 
   /**

@@ -83,6 +83,7 @@ import QueryActiveSession from '@/query/QueryActiveSession'
 import QueryUserActivity from '@/query/QueryUserActivity'
 import QueryToken from '@/query/QueryToken'
 import QueryMetaTypeViaAtom from '@/query/QueryMetaTypeViaAtom'
+import QueryMetaTypeViaMolecule from '@/query/QueryMetaTypeViaMolecule'
 
 // Mutation imports
 import MutationCreateToken from '@/mutation/MutationCreateToken'
@@ -99,6 +100,8 @@ import MutationWithdrawBufferToken from '@/mutation/MutationWithdrawBufferToken'
 import MutationRequestAuthorization from '@/mutation/MutationRequestAuthorization'
 import MutationRequestAuthorizationGuest from '@/mutation/MutationRequestAuthorizationGuest'
 import MutationLinkIdentifier from '@/mutation/MutationLinkIdentifier'
+import MutationPeering from '@/mutation/MutationPeering'
+import MutationAppendRequest from '@/mutation/MutationAppendRequest'
 
 // Subscribe imports
 import CreateMoleculeSubscribe from '@/subscribe/CreateMoleculeSubscribe'
@@ -143,6 +146,7 @@ export default class KnishIOClient {
   private $__logging: boolean = false
   private $__authTokenObjects: Record<string, AuthToken | null> = {}
   private $__authToken: AuthToken | null = null
+  private $__authInProcess: boolean = false
   private $__remainderWallet: Wallet | null = null
   private lastMoleculeQuery: Mutation | null = null
   private abortControllers: Map<string, AbortController> = new Map()
@@ -480,7 +484,17 @@ export default class KnishIOClient {
    */
   async executeQuery(query: Query | Mutation, variables: Record<string, any> | null = null): Promise<Response | null> {
     // Check and refresh authorization token if needed
-    if (this.$__authToken && this.$__authToken.isExpired()) {
+    // Guard with $__authInProcess to prevent recursive auth refresh
+    if (this.$__authToken) {
+      console.log('[TS-SDK DEBUG] executeQuery auth check:', {
+        expiresAt: this.$__authToken.getExpiresAt(),
+        isExpired: this.$__authToken.isExpired(),
+        expireInterval: this.$__authToken.getExpireInterval(),
+        authInProcess: this.$__authInProcess,
+        queryType: query.constructor.name
+      })
+    }
+    if (this.$__authToken && this.$__authToken.isExpired() && !this.$__authInProcess) {
       this.log('info', 'KnishIOClient::executeQuery() - Access token is expired. Getting new one...')
       await this.requestAuthToken({
         secret: this.$__secret,
@@ -489,6 +503,7 @@ export default class KnishIOClient {
       })
     }
 
+    console.log('[TS-SDK DEBUG] executeQuery - proceeding to execute:', query.constructor.name)
     // Execute the query
     return await query.execute({ variables: variables || {} })
   }
@@ -652,6 +667,9 @@ export default class KnishIOClient {
       this.setCellSlug(cellSlug)
     }
 
+    // Auth in process...
+    this.$__authInProcess = true
+
     // Auth token response
     let response: Response
 
@@ -676,6 +694,9 @@ export default class KnishIOClient {
 
     // Handle encryption if needed
     this.switchEncryption(encrypt)
+
+    // Auth process is stopped
+    this.$__authInProcess = false
 
     return response
   }
@@ -828,7 +849,7 @@ export default class KnishIOClient {
 
     const response = await this.executeQuery(walletQuery, {
       bundleHash: bundle || this.getBundle(),
-      tokenSlug: token,
+      token,
       unspent
     })
 
@@ -893,6 +914,7 @@ export default class KnishIOClient {
     count = null,
     countBy = null,
     throughAtom = true,
+    throughMolecule = false,
     values = null,
     keys = null,
     atomValues = null
@@ -908,22 +930,36 @@ export default class KnishIOClient {
     count?: number | null
     countBy?: string | null
     throughAtom?: boolean | null
+    throughMolecule?: boolean | null
     values?: any[] | null
     keys?: string[] | null
     atomValues?: any[] | null
   }): Promise<Response> {
-    // Normalize metaType to uppercase (consistent with createMeta)
-    const normalizedMetaType = typeof metaType === 'string' ? metaType.toUpperCase() : metaType
-
-    this.log('info', `KnishIOClient::queryMeta() - Querying metaType: ${normalizedMetaType}, metaId: ${metaId}...`)
+    this.log('info', `KnishIOClient::queryMeta() - Querying metaType: ${metaType}, metaId: ${metaId}...`)
 
     let query: Query
     let variables: Record<string, any>
 
-    if (throughAtom) {
+    if (throughMolecule) {
+      query = this.createQuery(QueryMetaTypeViaMolecule)
+      variables = QueryMetaTypeViaMolecule.createVariables({
+        metaType: metaType,
+        metaId,
+        key,
+        value,
+        latest,
+        filter,
+        queryArgs,
+        countBy,
+        values,
+        keys,
+        atomValues,
+        cellSlug: this.getCellSlug()
+      })
+    } else if (throughAtom) {
       query = this.createQuery(QueryMetaTypeViaAtom)
       variables = QueryMetaTypeViaAtom.createVariables({
-        metaType: normalizedMetaType,
+        metaType: metaType,
         metaId,
         key,
         value,
@@ -939,7 +975,7 @@ export default class KnishIOClient {
     } else {
       query = this.createQuery(QueryMetaType)
       variables = QueryMetaType.createVariables({
-        metaType: normalizedMetaType,
+        metaType: metaType,
         metaId,
         key,
         value,
@@ -953,6 +989,34 @@ export default class KnishIOClient {
     }
 
     return this.executeQuery(query, variables) as Promise<Response>
+  }
+
+  /**
+   * Queries meta assets and verifies cryptographic integrity of associated molecules.
+   * Forces throughMolecule=true to ensure molecule data is available for verification.
+   * Returns the same response as queryMeta(), with an additional `integrity` field on the payload.
+   */
+  async queryMetaVerified(params: {
+    metaType: MetaType | string
+    metaId?: MetaId | string | null
+    key?: string | null
+    value?: string | null
+    latest?: boolean | null
+    fields?: string[] | null
+    filter?: MetaFilter[] | null
+    queryArgs?: Record<string, any> | null
+    count?: number | null
+    countBy?: string | null
+    values?: any[] | null
+    keys?: string[] | null
+    atomValues?: any[] | null
+  }): Promise<Response> {
+    const response = await this.queryMeta({ ...params, throughMolecule: true })
+    const payload = response.payload()
+    if (payload && typeof (response as any).verifyIntegrity === 'function') {
+      payload.integrity = (response as any).verifyIntegrity()
+    }
+    return response
   }
 
   /**
@@ -1326,7 +1390,7 @@ export default class KnishIOClient {
     const recipientWallet = new Wallet({
       secret: this.getSecret(),
       bundle: this.getBundle(),
-      token: token.toUpperCase(),
+      token,
       batchId: batchId as any
     })
 
@@ -1372,7 +1436,7 @@ export default class KnishIOClient {
 
     // Initialize the request tokens mutation
     await mutation.fillMolecule({
-      token: token.toUpperCase(),
+      token,
       amount: amount ?? 0,
       metaType: to || '',
       metaId: to || '',
@@ -1429,7 +1493,7 @@ export default class KnishIOClient {
     const recipientWallet = new Wallet({
       secret: this.getSecret(),
       bundle: '0000000000000000000000000000000000000000000000000000000000000000',
-      token: token.toUpperCase()
+      token
     })
 
     await mutation.fillMolecule({
@@ -1514,7 +1578,7 @@ export default class KnishIOClient {
     const newWallet = new Wallet({
       secret: this.getSecret(),
       bundle: this.getBundle(),
-      token: token.toUpperCase()
+      token
     })
 
     // Initialize the create wallet mutation
@@ -1569,7 +1633,7 @@ export default class KnishIOClient {
 
     // Initialize the claim shadow wallet mutation
     await mutation.fillMolecule({
-      token: token.toUpperCase() as TokenSlug,
+      token: token as TokenSlug,
       batchId: shadowWallet.batchId
     })
 
@@ -1645,7 +1709,7 @@ export default class KnishIOClient {
 
     // Initialize the create meta mutation
     await mutation.fillMolecule({
-      metaType: metaType.toUpperCase(),
+      metaType,
       metaId,
       meta,
       policy
@@ -1682,7 +1746,7 @@ export default class KnishIOClient {
 
     // Initialize the create rule mutation
     await mutation.fillMolecule({
-      metaType: metaType.toUpperCase() as MetaType,
+      metaType: metaType as MetaType,
       metaId: metaId as MetaId,
       rule,
       policy
@@ -1820,7 +1884,7 @@ export default class KnishIOClient {
     // Execute with variables (bundleHash matches GraphQL variable name)
     const response = await this.executeQuery(mutation, {
       bundleHash: bundle || this.getBundle(),
-      metaType: metaType.toUpperCase(),
+      metaType,
       metaId,
       ipAddress,
       browser,
@@ -2009,13 +2073,19 @@ export default class KnishIOClient {
     // Did the authorization molecule get accepted?
     if (response.success()) {
       // Create & set an auth token from the response data
-      const payload = response.payload()
+      // Use accessor methods matching JS SDK pattern for reliable field extraction
+      console.log('[TS-SDK DEBUG] Auth response payload:', JSON.stringify(response.payload()))
+      console.log('[TS-SDK DEBUG] response.time():', response.time(), 'type:', typeof response.time())
+      console.log('[TS-SDK DEBUG] response.token():', response.token())
+      console.log('[TS-SDK DEBUG] response.pubKey():', response.pubKey())
+      console.log('[TS-SDK DEBUG] response.encrypt():', response.encrypt())
       const authToken = AuthToken.create({
-        token: payload.token,
-        expiresAt: Number(payload.time),
-        encrypt: payload.encrypt === 'true' || payload.encrypt === true,
-        pubkey: payload.key
+        token: response.token(),
+        expiresAt: Number(response.time()),
+        encrypt: String(response.encrypt()) === 'true',
+        pubkey: response.pubKey()
       }, wallet)
+      console.log('[TS-SDK DEBUG] AuthToken created - expiresAt:', authToken.getExpiresAt(), 'isExpired:', authToken.isExpired(), 'interval:', authToken.getExpireInterval())
       this.setAuthToken(authToken)
     } else {
       throw new AuthorizationRejectedException(
@@ -2026,6 +2096,71 @@ export default class KnishIOClient {
     // Handle encryption if needed
     if (encrypt) {
       this.switchEncryption(true)
+    }
+
+    return response
+  }
+
+  // =============================================================================
+  // MUTATION METHODS - PEERING & APPEND REQUEST
+  // =============================================================================
+
+  /**
+   * Register a peer node via P-isotope
+   * Matches JavaScript SDK registerPeer implementation exactly
+   */
+  async registerPeer({ host }: { host: string }): Promise<Response> {
+    this.log('info', `KnishIOClient::registerPeer() - Registering peer at ${host}...`)
+
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationPeering })
+
+    // Fill the molecule with peering data
+    mutation.fillMolecule({ host })
+
+    // Execute the mutation
+    const response = await this.executeQuery(mutation)
+
+    if (!response) {
+      throw new CodeException('Peer registration failed')
+    }
+
+    return response
+  }
+
+  /**
+   * Submit an append request via A-isotope
+   * Matches JavaScript SDK appendRequest implementation exactly
+   */
+  async appendRequest({
+    metaType,
+    metaId,
+    action,
+    meta = {}
+  }: {
+    metaType: string
+    metaId: string
+    action: string
+    meta?: Record<string, any>
+  }): Promise<Response> {
+    this.log('info', `KnishIOClient::appendRequest() - Submitting append request for ${metaType}:${metaId}...`)
+
+    // Create the molecule mutation
+    const mutation = await this.createMoleculeMutation({ mutationClass: MutationAppendRequest })
+
+    // Fill the molecule with append request data
+    mutation.fillMolecule({
+      metaType,
+      metaId,
+      action,
+      meta
+    })
+
+    // Execute the mutation
+    const response = await this.executeQuery(mutation)
+
+    if (!response) {
+      throw new CodeException('Append request failed')
     }
 
     return response

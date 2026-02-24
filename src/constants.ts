@@ -63,7 +63,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
  * Immutable array of atom isotopes with const assertion
  * Provides compile-time type safety and runtime immutability
  */
-export const ISOTOPES = ['C', 'V', 'U', 'T', 'M', 'I', 'R', 'B', 'F'] as const
+export const ISOTOPES = ['C', 'V', 'U', 'T', 'M', 'I', 'R', 'B', 'F', 'P', 'A'] as const
 export type AtomIsotope = typeof ISOTOPES[number]
 
 /**
@@ -71,14 +71,16 @@ export type AtomIsotope = typeof ISOTOPES[number]
  */
 export const ISOTOPE_DESCRIPTIONS = {
   C: 'Continue - Position continuation',
-  V: 'Value - Token value transfer', 
+  V: 'Value - Token value transfer',
   U: 'User - User token operations',
   T: 'Token - Token creation/management',
   M: 'Meta - Metadata operations',
   I: 'Identity - Identity operations',
   R: 'Rule - Policy operations',
   B: 'Buffer - Buffer token operations',
-  F: 'Fuse - Token fusion operations'
+  F: 'Fuse - Token fusion operations',
+  P: 'Peer - Peer registration operations',
+  A: 'Append - Append request operations'
 } as const satisfies Record<AtomIsotope, string>
 
 // =============================================================================

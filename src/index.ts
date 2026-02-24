@@ -113,6 +113,10 @@ export { default as MutationCreateMeta } from './mutation/MutationCreateMeta'
 export { default as MutationCreateToken } from './mutation/MutationCreateToken'
 export { default as MutationRequestTokens } from './mutation/MutationRequestTokens'
 
+// P-isotope and A-isotope Mutation classes
+export { default as MutationPeering } from './mutation/MutationPeering'
+export { default as MutationAppendRequest } from './mutation/MutationAppendRequest'
+
 // Essential Response classes (Phase 1)
 export { default as ResponseBalance } from './response/ResponseBalance'
 export { default as ResponseWalletBundle } from './response/ResponseWalletBundle'
@@ -133,6 +137,10 @@ export { default as ResponseMetaTypeViaAtom } from './response/ResponseMetaTypeV
 // Phase 2 Tier 2 Priority 2: Token Operations
 export { default as ResponseCreateToken } from './response/ResponseCreateToken'
 export { default as ResponseRequestTokens } from './response/ResponseRequestTokens'
+
+// P-isotope and A-isotope Response classes
+export { default as ResponsePeering } from './response/ResponsePeering'
+export { default as ResponseAppendRequest } from './response/ResponseAppendRequest'
 
 // Phase 2 Tier 2 Priority 3: Essential Query Operations
 export { default as ResponseContinuId } from './response/ResponseContinuId'

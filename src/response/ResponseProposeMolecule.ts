@@ -74,7 +74,6 @@ export default class ResponseProposeMolecule extends Response {
       dataKey: 'data.ProposeMolecule'
     })
     this.$__clientMolecule = (query as any).molecule()
-    this.init()
   }
 
   /**

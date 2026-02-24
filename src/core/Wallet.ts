@@ -402,8 +402,8 @@ export default class Wallet {
    */
   initializeMLKEM(): void {
     // Generate a 64-byte (512-bit) seed from the Knish.IO private key
-    // Use deterministic approach: generateSecret(key, 64) → matches JS SDK exactly
-    const seedHex = generateSecret(this.key!, 64)  // Matches JS SDK for cross-platform compatibility
+    // Use deterministic approach: generateSecret(key, 128) → 128 hex chars = 64 bytes
+    const seedHex = generateSecret(this.key!, 128)  // 128 hex chars = 64 bytes, matches JS SDK
     
     // Convert the hex string to a Uint8Array  
     const seed = new Uint8Array(64)

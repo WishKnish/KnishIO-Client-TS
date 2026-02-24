@@ -65,10 +65,9 @@ export default class ResponsePolicy extends Response {
   }) {
     super({
       query,
-      json
+      json,
+      dataKey: 'data.Policy'
     })
-    this.dataKey = 'data.Policy'
-    this.init()
   }
 
   /**

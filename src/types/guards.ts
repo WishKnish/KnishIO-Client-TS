@@ -115,8 +115,8 @@ export function assertExhaustive<T>(
  * Exhaustive isotope type guard with compile-time checking
  */
 export function isAtomIsotope(value: unknown): value is AtomIsotope {
-  return typeof value === 'string' && 
-    (['C', 'V', 'U', 'T', 'M', 'I', 'R', 'B', 'F'] as const).includes(value as AtomIsotope)
+  return typeof value === 'string' &&
+    (['C', 'V', 'U', 'T', 'M', 'I', 'R', 'B', 'F', 'P', 'A'] as const).includes(value as AtomIsotope)
 }
 
 /**
@@ -158,6 +158,14 @@ export function isFuseIsotope(value: unknown): value is 'F' {
   return value === 'F'
 }
 
+export function isPeerIsotope(value: unknown): value is 'P' {
+  return value === 'P'
+}
+
+export function isAppendIsotope(value: unknown): value is 'A' {
+  return value === 'A'
+}
+
 /**
  * Exhaustive isotope handler with compile-time completeness
  */
@@ -173,6 +181,8 @@ export function handleIsotope<T>(
     readonly R: () => T
     readonly B: () => T
     readonly F: () => T
+    readonly P: () => T
+    readonly A: () => T
   }
 ): T {
   switch (isotope) {
@@ -185,6 +195,8 @@ export function handleIsotope<T>(
     case 'R': return handlers.R()
     case 'B': return handlers.B()
     case 'F': return handlers.F()
+    case 'P': return handlers.P()
+    case 'A': return handlers.A()
     default: return assertNever(isotope)
   }
 }
@@ -594,6 +606,8 @@ export const Guards = {
     rule: isRuleIsotope,
     buffer: isBufferIsotope,
     fuse: isFuseIsotope,
+    peer: isPeerIsotope,
+    append: isAppendIsotope,
     handle: handleIsotope
   },
   
