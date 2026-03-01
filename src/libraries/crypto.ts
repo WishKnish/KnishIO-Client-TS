@@ -176,19 +176,15 @@ export function generateSecretEnhanced(options: SecretGenerationOptions): string
  * Generate bundle hash from secret - MUST produce identical results to JS SDK
  * Uses SHAKE256 with 256-bit output (64 hex characters)
  */
-export function generateBundleHash(secret: string, source: string | null = null): BundleHash {
+export function generateBundleHash(secret: string, _source: string | null = null): BundleHash {
   if (!secret || secret.length === 0) {
     throw new Error('Secret is required for bundle hash generation')
   }
 
-  let input = secret
-  if (source) {
-    input = secret + source
-  }
-
-  // Fix: BUNDLE_HASH_LENGTH is 64 (hex chars), but shake256 expects bits
-  // So we multiply by 4: 64 hex chars * 4 = 256 bits (matching JS SDK)
-  const hash = shake256(input, CRYPTO_CONSTANTS.BUNDLE_HASH_LENGTH * 4)
+  // CRITICAL: source parameter must be IGNORED to match JS SDK behavior.
+  // JS SDK's generateBundleHash() accepts source but never uses it.
+  // The bundle hash is an identity anchor and must be deterministic from secret alone.
+  const hash = shake256(secret, CRYPTO_CONSTANTS.BUNDLE_HASH_LENGTH * 4)
   return hash as BundleHash
 }
 
@@ -251,30 +247,18 @@ export function generatePositionEnhanced(options: PositionGenerationOptions = {}
  * Generate batch ID from molecular hash and index
  * Uses SHAKE256 to create deterministic batch identifiers
  */
-export function generateBatchId({ 
-  molecularHash = null, 
-  index = null 
-}: { 
+export function generateBatchId({
+  molecularHash = null,
+  index = null
+}: {
   molecularHash?: string | null
-  index?: number | null 
+  index?: number | null
 } = {}): string {
-  let input = ''
-  
-  if (molecularHash) {
-    input += molecularHash
+  // Match JS SDK: require BOTH molecularHash AND index for deterministic batch ID
+  if (molecularHash && index !== null) {
+    return shake256(molecularHash + index, 256) // 256 bits = 64 hex chars
   }
-  
-  if (index !== null) {
-    input += index.toString()
-  }
-  
-  // If no input provided, generate random batch ID
-  if (input === '') {
-    input = randomString(32)
-  }
-  
-  // Use SHAKE256 to generate 64-character batch ID
-  return shake256(input, 64)
+  return randomString(64)
 }
 
 // =============================================================================

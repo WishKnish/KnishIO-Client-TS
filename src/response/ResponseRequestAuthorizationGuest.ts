@@ -111,10 +111,34 @@ export default class ResponseRequestAuthorizationGuest extends Response {
   }
 
   /**
-   * Returns timestamp
+   * Returns raw time value from payload
    */
   time(): any {
     return this.payloadKey('time')
+  }
+
+  /**
+   * Returns the expiration timestamp as Unix seconds.
+   * Handles both server formats:
+   * - PHP server: time = lifetime in ms, expiresAt = Unix timestamp in payload
+   * - Rust server: time = Unix timestamp in seconds
+   */
+  expiresAt(): number {
+    try {
+      const ea = this.payloadKey('expiresAt')
+      if (ea) {
+        return Number(ea)
+      }
+    } catch (_e) {
+      // Not available in payload, fall back
+    }
+
+    const timeValue = Number(this.time())
+    if (timeValue >= 1577836800) {
+      return timeValue
+    }
+
+    return Math.floor(Date.now() / 1000) + Math.floor(timeValue / 1000)
   }
 
   /**

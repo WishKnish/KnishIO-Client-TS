@@ -462,7 +462,7 @@ export default class CheckMolecule {
         throw new TypeError('Invalid isotope "V" values')
       }
 
-      const remainder = senderWallet.balance + firstValue
+      const remainder = Number(senderWallet.balance) + firstValue
 
       // Is there enough balance to send?
       if (remainder < 0) {

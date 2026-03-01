@@ -125,7 +125,7 @@ export default class ResponseWalletList extends Response {
       }
     }
 
-    wallet.balance = Number(data.amount)
+    wallet.balance = String(data.amount != null ? data.amount : 0)
     wallet.pubkey = data.pubkey
     wallet.createdAt = data.createdAt
 

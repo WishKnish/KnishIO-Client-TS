@@ -338,6 +338,10 @@ export default class KnishIOClient {
     } else {
       this.$__uris = uri
     }
+    // Update the underlying GraphQL client's URI
+    if (this.$__client && 'setUri' in this.$__client) {
+      (this.$__client as any).setUri(this.getRandomUri())
+    }
   }
 
   /**
@@ -410,7 +414,8 @@ export default class KnishIOClient {
   }
 
   /**
-   * Creates a new molecule for a transaction
+   * Instantiates a new Molecule and prepares this client session to operate on it
+   * Matches JavaScript SDK createMolecule implementation
    */
   async createMolecule({
     secret = null,
@@ -436,19 +441,29 @@ export default class KnishIOClient {
       this.lastMoleculeQuery.response()?.success()
     ) {
       sourceWallet = this.getRemainderWallet()
+      this.log('info', `KnishIOClient::createMolecule() - Using carry-forward remainder wallet at position ${sourceWallet?.position?.substring(0, 16)}...`)
     }
 
     // Unable to use last remainder wallet; Figure out what wallet to use:
     if (!sourceWallet) {
-      // Get source wallet
       sourceWallet = await this.getSourceWallet()
     }
 
+    // Set the remainder wallet for the next transaction (always USER token for ContinuID)
+    this.setRemainderWallet(remainderWallet || Wallet.create({
+      secret: secret!,
+      bundle,
+      token: 'USER',
+      batchId: sourceWallet!.batchId,
+      characters: sourceWallet!.characters
+    }))
+
     return new Molecule({
       secret,
-      bundle,
       sourceWallet,
-      remainderWallet
+      remainderWallet: this.getRemainderWallet()!,
+      cellSlug: this.getCellSlug(),
+      version: this.getServerSdkVersion()
     })
   }
 
@@ -485,15 +500,6 @@ export default class KnishIOClient {
   async executeQuery(query: Query | Mutation, variables: Record<string, any> | null = null): Promise<Response | null> {
     // Check and refresh authorization token if needed
     // Guard with $__authInProcess to prevent recursive auth refresh
-    if (this.$__authToken) {
-      console.log('[TS-SDK DEBUG] executeQuery auth check:', {
-        expiresAt: this.$__authToken.getExpiresAt(),
-        isExpired: this.$__authToken.isExpired(),
-        expireInterval: this.$__authToken.getExpireInterval(),
-        authInProcess: this.$__authInProcess,
-        queryType: query.constructor.name
-      })
-    }
     if (this.$__authToken && this.$__authToken.isExpired() && !this.$__authInProcess) {
       this.log('info', 'KnishIOClient::executeQuery() - Access token is expired. Getting new one...')
       await this.requestAuthToken({
@@ -503,7 +509,6 @@ export default class KnishIOClient {
       })
     }
 
-    console.log('[TS-SDK DEBUG] executeQuery - proceeding to execute:', query.constructor.name)
     // Execute the query
     return await query.execute({ variables: variables || {} })
   }
@@ -529,16 +534,29 @@ export default class KnishIOClient {
   }
 
   /**
-   * Gets source wallet - basic implementation
+   * Retrieves this session's wallet used for signing the next Molecule
+   * Queries ContinuID from the server to get the authoritative position
+   * Matches JavaScript SDK getSourceWallet implementation
    */
   async getSourceWallet(): Promise<Wallet> {
-    // For now, create a new wallet with the current secret
-    // In full implementation, this would query the ledger
-    return Wallet.create({
-      secret: this.getSecret(),
-      bundle: this.getBundle(),
-      token: 'USER'
-    })
+    // Match JavaScript SDK exactly: no try/catch, errors propagate
+    let sourceWallet: Wallet | null = (await this.queryContinuId({
+      bundle: this.getBundle()
+    }))?.payload() as Wallet | null
+
+    if (!sourceWallet) {
+      sourceWallet = new Wallet({
+        secret: this.getSecret()
+      })
+    } else {
+      sourceWallet.key = Wallet.generateKey({
+        secret: this.getSecret(),
+        token: sourceWallet.token,
+        position: sourceWallet.position!
+      })
+    }
+
+    return sourceWallet
   }
 
   /**
@@ -584,7 +602,7 @@ export default class KnishIOClient {
     }
 
     // Do you have enough tokens?
-    if (sourceWallet === null || Decimal.cmp(sourceWallet.balance, amount) < 0) {
+    if (sourceWallet === null || Decimal.cmp(Number(sourceWallet.balance), amount) < 0) {
       throw new TransferBalanceException()
     }
 
@@ -819,7 +837,7 @@ export default class KnishIOClient {
 
     // Do you have enough tokens?
     const amountNum = typeof amount === 'string' ? Number(amount) : amount
-    if (sourceWallet === null || Decimal.cmp(sourceWallet.balance || 0, amountNum) < 0) {
+    if (sourceWallet === null || Decimal.cmp(Number(sourceWallet.balance || 0), amountNum) < 0) {
       throw new TransferBalanceException()
     }
 
@@ -1704,14 +1722,20 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createMeta() - Creating metadata for ${metaType}:${metaId}...`)
 
-    // Create the molecule mutation
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateMeta })
+    // Create the molecule mutation — let createMolecule() handle sourceWallet via
+    // carry-forward (remainder wallet from prior mutation) or server fallback
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationCreateMeta,
+      molecule: await this.createMolecule({
+        secret: this.getSecret()
+      })
+    })
 
     // Initialize the create meta mutation
     await mutation.fillMolecule({
       metaType,
       metaId,
-      meta,
+      meta: meta || {},
       policy
     })
 
@@ -1741,8 +1765,14 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createRule() - Creating rule for ${metaType}:${metaId}...`)
 
-    // Create the molecule mutation
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateRule })
+    // Create the molecule mutation — let createMolecule() handle sourceWallet via
+    // carry-forward (remainder wallet from prior mutation) or server fallback
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationCreateRule,
+      molecule: await this.createMolecule({
+        secret: this.getSecret()
+      })
+    })
 
     // Initialize the create rule mutation
     await mutation.fillMolecule({
@@ -2073,19 +2103,12 @@ export default class KnishIOClient {
     // Did the authorization molecule get accepted?
     if (response.success()) {
       // Create & set an auth token from the response data
-      // Use accessor methods matching JS SDK pattern for reliable field extraction
-      console.log('[TS-SDK DEBUG] Auth response payload:', JSON.stringify(response.payload()))
-      console.log('[TS-SDK DEBUG] response.time():', response.time(), 'type:', typeof response.time())
-      console.log('[TS-SDK DEBUG] response.token():', response.token())
-      console.log('[TS-SDK DEBUG] response.pubKey():', response.pubKey())
-      console.log('[TS-SDK DEBUG] response.encrypt():', response.encrypt())
       const authToken = AuthToken.create({
         token: response.token(),
-        expiresAt: Number(response.time()),
+        expiresAt: response.expiresAt(),
         encrypt: String(response.encrypt()) === 'true',
         pubkey: response.pubKey()
       }, wallet)
-      console.log('[TS-SDK DEBUG] AuthToken created - expiresAt:', authToken.getExpiresAt(), 'isExpired:', authToken.isExpired(), 'interval:', authToken.getExpireInterval())
       this.setAuthToken(authToken)
     } else {
       throw new AuthorizationRejectedException(
@@ -2112,8 +2135,14 @@ export default class KnishIOClient {
   async registerPeer({ host }: { host: string }): Promise<Response> {
     this.log('info', `KnishIOClient::registerPeer() - Registering peer at ${host}...`)
 
-    // Create the molecule mutation
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationPeering })
+    // Create the molecule mutation — let createMolecule() handle sourceWallet via
+    // carry-forward (remainder wallet from prior mutation) or server fallback
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationPeering,
+      molecule: await this.createMolecule({
+        secret: this.getSecret()
+      })
+    })
 
     // Fill the molecule with peering data
     mutation.fillMolecule({ host })
@@ -2145,8 +2174,14 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::appendRequest() - Submitting append request for ${metaType}:${metaId}...`)
 
-    // Create the molecule mutation
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationAppendRequest })
+    // Create the molecule mutation — let createMolecule() handle sourceWallet via
+    // carry-forward (remainder wallet from prior mutation) or server fallback
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationAppendRequest,
+      molecule: await this.createMolecule({
+        secret: this.getSecret()
+      })
+    })
 
     // Fill the molecule with append request data
     mutation.fillMolecule({

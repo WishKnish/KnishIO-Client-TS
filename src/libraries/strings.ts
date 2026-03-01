@@ -78,7 +78,7 @@ export function chunkSubstr(str: string, size: number): string[] {
  */
 export function randomString(
   length = 32,
-  alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  alphabet = 'abcdef0123456789'
 ): string {
   if (length <= 0) return ''
   
@@ -108,7 +108,8 @@ export function randomString(
 
 /**
  * Convert between different character sets/bases
- * Ported from JavaScript SDK for cross-platform compatibility
+ * Uses BigInt for arbitrary-precision arithmetic to handle 256-bit hashes
+ * MUST match JavaScript SDK charsetBaseConvert exactly
  */
 export function charsetBaseConvert(
   src: string,
@@ -120,37 +121,37 @@ export function charsetBaseConvert(
   if (!src || fromBase < 2 || toBase < 2 || fromBase > srcSymbolTable.length || toBase > destSymbolTable.length) {
     return false
   }
-  
+
   try {
-    // Convert from source base to decimal
-    let decimalValue = 0
-    const srcLength = src.length
-    
-    for (let i = 0; i < srcLength; i++) {
-      const char = src.charAt(srcLength - 1 - i)
-      const charIndex = srcSymbolTable.indexOf(char)
-      
-      if (charIndex === -1) {
+    // Convert from source base to BigInt (arbitrary precision)
+    let val = BigInt(0)
+    const bigFromBase = BigInt(fromBase)
+
+    for (let charIndex = 0; charIndex < src.length; charIndex++) {
+      const symbolIndex = srcSymbolTable.indexOf(src.charAt(charIndex))
+
+      if (symbolIndex === -1) {
         return false // Invalid character for source base
       }
-      
-      decimalValue += charIndex * Math.pow(fromBase, i)
+
+      val = val * bigFromBase + BigInt(symbolIndex)
     }
-    
-    // Convert from decimal to destination base
-    if (decimalValue === 0) {
+
+    // Convert from BigInt to destination base
+    if (val === BigInt(0)) {
       return destSymbolTable.charAt(0)
     }
-    
+
+    const bigToBase = BigInt(toBase)
     let result = ''
-    while (decimalValue > 0) {
-      const remainder = decimalValue % toBase
-      result = destSymbolTable.charAt(remainder) + result
-      decimalValue = Math.floor(decimalValue / toBase)
+    while (val > BigInt(0)) {
+      const remainder = val % bigToBase
+      result = destSymbolTable.charAt(Number(remainder)) + result
+      val = val / bigToBase
     }
-    
-    return result
-    
+
+    return result || '0'
+
   } catch (error) {
     return false
   }

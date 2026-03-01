@@ -172,8 +172,8 @@ export interface AtomMetaData extends MetaData {
 export interface AtomParams {
   position?: string | null
   walletAddress?: WalletAddress | null
-  isotope?: AtomIsotope
-  token?: TokenSlug | string
+  isotope?: AtomIsotope | null
+  token?: TokenSlug | string | null
   value?: string | number | null
   batchId?: BatchId | string | null
   metaType?: MetaType | string | null

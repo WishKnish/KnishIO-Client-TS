@@ -73,25 +73,9 @@ export default class AtomMeta {
    * @return This instance for chaining
    */
   merge(meta: Record<string, any> | NormalizedMeta[]): AtomMeta {
-    const normalized = Meta.normalizeMeta(meta)
-    
-    // Use Set to avoid duplicates based on key
-    const existingKeys = new Set(this.meta.map(m => m.key))
-    
-    for (const item of normalized) {
-      if (existingKeys.has(item.key)) {
-        // Update existing key
-        const index = this.meta.findIndex(m => m.key === item.key)
-        if (index !== -1) {
-          this.meta[index] = item
-        }
-      } else {
-        // Add new key
-        this.meta.push(item)
-        existingKeys.add(item.key)
-      }
-    }
-    
+    // Match JS SDK exactly: Array.from(new Set([...this.meta, ...Meta.normalizeMeta(meta)]))
+    // Set uses reference equality for objects, so it never deduplicates — effectively concatenation
+    this.meta = [...this.meta, ...Meta.normalizeMeta(meta)]
     return this
   }
 
@@ -115,23 +99,22 @@ export default class AtomMeta {
    * @return This instance for chaining
    */
   setAtomWallet(wallet: any): AtomMeta {
-    const walletMeta: Record<string, any> = {
-      pubkey: wallet.pubkey,
-      characters: wallet.characters
-    }
+    const walletMeta: Record<string, any> = {}
 
-    // Add token units meta key if present
+    // Add token units meta key (matches JS SDK exactly — no pubkey/characters)
     if (wallet.tokenUnits && wallet.tokenUnits.length) {
       walletMeta.tokenUnits = JSON.stringify(wallet.getTokenUnitsData ? wallet.getTokenUnitsData() : wallet.tokenUnits)
     }
 
-    // Add trade rates meta key if present
-    if (wallet.tradeRates && Object.keys(wallet.tradeRates).length) {
+    // Add trade rates meta key
+    if (wallet.tradeRates && wallet.tradeRates.length) {
       walletMeta.tradeRates = JSON.stringify(wallet.tradeRates)
     }
 
-    // Merge all wallet's metas
-    this.merge(walletMeta)
+    // Merge all wallet's metas (if any)
+    if (Object.keys(walletMeta).length > 0) {
+      this.merge(walletMeta)
+    }
     return this
   }
 

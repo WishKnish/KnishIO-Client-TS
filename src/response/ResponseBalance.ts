@@ -149,7 +149,7 @@ export default class ResponseBalance extends Response {
     }
 
     // Set balance and other properties
-    wallet.balance = Number(data.amount || 0)
+    wallet.balance = String(data.amount != null ? data.amount : 0)
     wallet.pubkey = data.pubkey
     wallet.createdAt = data.createdAt
 

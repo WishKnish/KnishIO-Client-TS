@@ -60,13 +60,8 @@ export default class MutationRequestAuthorization extends MutationProposeMolecul
    */
   override fillMolecule({ meta }: { meta: any }): void {
     this.$__molecule.initAuthorization({ meta })
-    console.log('[TS-SDK DEBUG] MutationRequestAuthorization: starting WOTS+ sign...')
-    console.time('[TS-SDK DEBUG] WOTS+ sign duration')
     this.$__molecule.sign({})
-    console.timeEnd('[TS-SDK DEBUG] WOTS+ sign duration')
-    console.log('[TS-SDK DEBUG] MutationRequestAuthorization: sign complete, running check...')
     this.$__molecule.check()
-    console.log('[TS-SDK DEBUG] MutationRequestAuthorization: check complete')
   }
 
   /**

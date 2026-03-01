@@ -56,8 +56,10 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import { convertToBase17 } from '@/libraries/crypto'
 import JsSHA from 'jssha'
-import { PROTOCOL_CONFIG } from '@/constants'
+import versions from '@/versions'
 import { handleIsotope, isWalletAddress, isPosition } from '@/types/guards'
+import Meta from '@/core/Meta'
+import AtomMeta from '@/core/AtomMeta'
 import type {
   AtomIsotope,
   AtomParams,
@@ -87,7 +89,7 @@ export const ATOM_DEFAULTS = {
   META: [],
   OTS_FRAGMENT: null,
   INDEX: null,
-  VERSION: PROTOCOL_CONFIG.DEFAULT_SDK_VERSION
+  VERSION: null
 } as const satisfies {
   readonly POSITION: string
   readonly WALLET_ADDRESS: string
@@ -100,7 +102,7 @@ export const ATOM_DEFAULTS = {
   readonly META: readonly []
   readonly OTS_FRAGMENT: null
   readonly INDEX: null
-  readonly VERSION: number
+  readonly VERSION: null
 }
 
 /**
@@ -119,8 +121,8 @@ export const ATOM_VALIDATION = {
 
 export interface AtomMetaData {
   readonly key: string
-  readonly value: string | number | boolean | null
-  readonly [additionalProps: string]: unknown
+  readonly value: string | null
+  readonly [props: string]: unknown
 }
 
 export interface AtomCreationParams extends AtomParams {
@@ -151,12 +153,12 @@ export interface AtomHashableData {
  * Maintains full compatibility with JavaScript SDK implementation
  */
 export default class Atom {
-  // Core properties matching JS SDK exactly
-  public position: string
-  public walletAddress: WalletAddress | string
-  public isotope: AtomIsotope
-  public token: TokenSlug | string
-  public value: string | number | null
+  // Core properties matching JS SDK exactly (all default to null)
+  public position: string | null
+  public walletAddress: WalletAddress | string | null
+  public isotope: AtomIsotope | null
+  public token: TokenSlug | string | null
+  public value: string | null
   public batchId: BatchId | string | null
   public metaType: MetaType | string | null
   public metaId: MetaId | string | null
@@ -164,42 +166,45 @@ export default class Atom {
   public otsFragment: string | null
   public index: number | null
   public createdAt: string
-  public version: string | number | null | undefined
+  public version: string | undefined
 
   /**
    * Create a new Atom instance
    * Constructor signature matches JavaScript SDK exactly
    */
   constructor({
-    position = ATOM_DEFAULTS.POSITION,
-    walletAddress = ATOM_DEFAULTS.WALLET_ADDRESS as any,
-    isotope = ATOM_DEFAULTS.ISOTOPE as AtomIsotope,
-    token = ATOM_DEFAULTS.TOKEN,
-    value = ATOM_DEFAULTS.VALUE,
-    batchId = ATOM_DEFAULTS.BATCH_ID,
-    metaType = ATOM_DEFAULTS.META_TYPE,
-    metaId = ATOM_DEFAULTS.META_ID,
+    position = null,
+    walletAddress = null,
+    isotope = null,
+    token = null,
+    value = null,
+    batchId = null,
+    metaType = null,
+    metaId = null,
     meta = null,
-    otsFragment = ATOM_DEFAULTS.OTS_FRAGMENT,
-    index = ATOM_DEFAULTS.INDEX,
+    otsFragment = null,
+    index = null,
     createdAt = null,
-    version = ATOM_DEFAULTS.VERSION
+    version = null
   }: AtomCreationParams = {}) {
     
-    // Use const assertion values with nullish coalescing (2025 pattern)
-    this.position = position ?? ATOM_DEFAULTS.POSITION
-    this.walletAddress = walletAddress ?? ATOM_DEFAULTS.WALLET_ADDRESS
-    this.isotope = isotope ?? ATOM_DEFAULTS.ISOTOPE
-    this.token = token ?? ATOM_DEFAULTS.TOKEN
-    this.value = value
+    // Match JS SDK constructor exactly
+    this.position = position
+    this.walletAddress = walletAddress
+    this.isotope = isotope
+    this.token = token
+    this.value = value !== null && value !== undefined ? String(value) : null
     this.batchId = batchId
     this.metaType = metaType
     this.metaId = metaId
-    this.meta = meta ? [...meta] : [...ATOM_DEFAULTS.META]
+    this.meta = meta ? Meta.normalizeMeta(meta) as AtomMetaData[] : []
     this.otsFragment = otsFragment
     this.index = index
-    this.version = version ?? ATOM_DEFAULTS.VERSION
-    // CRITICAL: Use provided createdAt or generate timestamp in milliseconds as string (Implementation Guide requirement)
+    // Match JS SDK: only set version if it exists in the version registry
+    if (version !== null && version !== undefined && Object.prototype.hasOwnProperty.call(versions as Record<string, any>, version)) {
+      this.version = String(version)
+    }
+    // Match JS SDK: always generate fresh createdAt (JS SDK has no createdAt parameter)
     this.createdAt = createdAt || String(+new Date())
   }
 
@@ -261,7 +266,7 @@ export default class Atom {
     return {
       position: this.position || '',
       walletAddress: this.walletAddress?.toString() || '',
-      isotope: this.isotope,
+      isotope: (this.isotope || 'C') as AtomIsotope,
       token: this.token?.toString() || '',
       value: this.value !== null ? this.value.toString() : null,
       batchId: this.batchId?.toString() || null,
@@ -309,17 +314,19 @@ export default class Atom {
       }
 
       // Core atom properties — matches JavaScript SDK Atom.toJSON() exactly
+      // Uses ?? (nullish coalescing) not || (falsy coalescing) to preserve 0/false/"" values
+      // No .toString() calls — raw values must match what getHashableValues() hashed
       const serialized: Record<string, unknown> = {
-        position: this.position || '',
-        walletAddress: this.walletAddress?.toString() || '',
+        position: this.position ?? '',
+        walletAddress: this.walletAddress ?? '',
         isotope: this.isotope,
-        token: this.token?.toString() || '',
-        value: this.value !== null ? this.value.toString() : null,
+        token: this.token ?? '',
+        value: this.value,
         batchId: this.batchId,
-        metaType: this.metaType?.toString() || null,
-        metaId: this.metaId?.toString() || null,
-        meta: this.meta.length > 0 ? [...this.meta] : [],
-        index: this.index !== null ? this.index : 0,
+        metaType: this.metaType,
+        metaId: this.metaId,
+        meta: this.meta || [],
+        index: this.index,
         createdAt: this.createdAt,
         version: this.version
       }
@@ -343,8 +350,8 @@ export default class Atom {
     return new Atom({
       position: this.position,
       walletAddress: this.walletAddress as any,
-      isotope: this.isotope,
-      token: this.token,
+      isotope: this.isotope as AtomIsotope,
+      token: this.token as string,
       value: this.value,
       batchId: this.batchId,
       metaType: this.metaType,
@@ -365,6 +372,9 @@ export default class Atom {
     if (!isPosition(this.position) || !isWalletAddress(this.walletAddress)) {
       return false
     }
+
+    // Null isotope is invalid
+    if (!this.isotope) return false
 
     // Exhaustive isotope validation with compile-time completeness
     return handleIsotope(this.isotope, {
@@ -413,25 +423,67 @@ export default class Atom {
    */
   static getUnclaimedProps(): string[] {
     return [
-      'position',
-      'walletAddress',
-      'isotope', 
-      'token',
-      'value',
-      'batchId',
-      'metaType',
-      'metaId',
-      'meta',
-      'createdAt'
+      'otsFragment'
     ]
   }
 
   /**
    * Create atom from parameters - factory method
-   * Matches JavaScript SDK Atom.create static method
+   * Matches JavaScript SDK Atom.create static method exactly
+   * Processes wallet meta, extracts wallet fields, normalizes meta
    */
-  static create(params: AtomCreationParams): Atom {
-    return new Atom(params)
+  static create({
+    isotope,
+    wallet = null,
+    value = null,
+    metaType = null,
+    metaId = null,
+    meta = null,
+    batchId = null
+  }: {
+    isotope: AtomIsotope | string
+    wallet?: any | null
+    value?: string | number | null
+    metaType?: string | null
+    metaId?: string | null
+    meta?: AtomMeta | any[] | Record<string, any> | null
+    batchId?: string | null
+  }): Atom {
+    // If meta object is not passed - create it
+    let atomMeta: AtomMeta
+    if (!meta) {
+      atomMeta = new AtomMeta()
+    } else if (meta instanceof AtomMeta) {
+      // If meta object is already an instance of AtomMeta - use it
+      atomMeta = meta
+    } else {
+      // Otherwise create from meta
+      atomMeta = new AtomMeta(meta)
+    }
+
+    // If wallet has been passed => add related metas
+    if (wallet) {
+      // Add wallet's meta
+      atomMeta.setAtomWallet(wallet)
+
+      // If batch ID not passed: set it from the wallet
+      if (!batchId) {
+        batchId = wallet.batchId
+      }
+    }
+
+    // Create the final atom
+    return new Atom({
+      position: wallet ? wallet.position : null,
+      walletAddress: wallet ? wallet.address : null,
+      isotope: isotope as AtomIsotope,
+      token: wallet ? wallet.token : null,
+      value,
+      batchId,
+      metaType,
+      metaId,
+      meta: atomMeta.get() as any
+    })
   }
 
   /**
@@ -522,33 +574,37 @@ export default class Atom {
     if (!atoms || atoms.length === 0) {
       return ''
     }
-    
+
     // Step 1: Sort atoms by index to ensure deterministic hashing (matches JS SDK)
     const atomList = Atom.sortAtoms(atoms)
-    const numberOfAtoms = String(atoms.length)
-    let hashableValues: string[] = []
-
-    // Step 2: Build hashableValues array exactly like JavaScript SDK
-    for (const atom of atomList) {
-      // Add number of atoms (matching JS SDK comment: "Add number of atoms (???)")
-      hashableValues.push(numberOfAtoms)
-      
-      // Add atom's properties - concatenate the array returned by getHashableValues
-      hashableValues = hashableValues.concat(atom.getHashableValues())
-    }
-
-    // Step 3: Create molecular hash using SHAKE256 exactly like JS SDK (iterative updates)
     const molecularSponge = new JsSHA('SHAKE256', 'TEXT')
-    
-    // CRITICAL FIX: Use iterative updates like JavaScript, not string concatenation
-    for (const hashableValue of hashableValues) {
-      molecularSponge.update(hashableValue)  // Match JavaScript SDK exactly
+
+    // Step 2: Check for versioned hashing (matches JS SDK Atom.hashAtoms lines 365-366)
+    const versionRegistry = versions as Record<number | string, any>
+    if (atomList.every(atom => atom.version && Object.prototype.hasOwnProperty.call(versionRegistry, atom.version))) {
+      // Versioned path: create structured view of each atom and hash as JSON
+      molecularSponge.update(JSON.stringify(
+        atomList.map(atom => versionRegistry[atom.version!].create(atom).view())
+      ))
+    } else {
+      // Legacy path: field-by-field with incremental SHAKE256 updates
+      const numberOfAtoms = String(atoms.length)
+      let hashableValues: string[] = []
+
+      for (const atom of atomList) {
+        hashableValues.push(numberOfAtoms)
+        hashableValues = hashableValues.concat(atom.getHashableValues())
+      }
+
+      for (const hashableValue of hashableValues) {
+        molecularSponge.update(hashableValue)
+      }
     }
-    
-    // Step 4: Get hex hash (256 bits = 64 hex chars) and convert to base17
+
+    // Step 3: Get hex hash (256 bits = 64 hex chars) and convert to base17
     const hexHash = molecularSponge.getHash('HEX', { outputLen: 256 })
-    
-    // Step 5: Convert hex hash to base17 format (Implementation Guide requirement)
+
+    // Step 4: Convert hex hash to base17 format (Implementation Guide requirement)
     return convertToBase17(hexHash.toLowerCase())
   }
 
@@ -557,10 +613,9 @@ export default class Atom {
    * Matches JavaScript SDK sortAtoms method
    */
   static sortAtoms(atoms: Atom[]): Atom[] {
-    return [...atoms].sort((a, b) => {
-      const indexA = a.index !== null ? a.index : 0
-      const indexB = b.index !== null ? b.index : 0
-      return indexA - indexB
+    return [...atoms].sort((first, second) => {
+      // Match JS SDK exactly: first.index < second.index ? -1 : 1
+      return first.index! < second.index! ? -1 : 1
     })
   }
 
@@ -569,15 +624,7 @@ export default class Atom {
    * Matches JavaScript SDK generateNextAtomIndex method
    */
   static generateNextAtomIndex(atoms: Atom[]): number {
-    if (!atoms || atoms.length === 0) {
-      return 0
-    }
-
-    const indices = atoms
-      .map(atom => atom.index !== null ? atom.index : 0)
-      .filter(index => typeof index === 'number')
-
-    return indices.length > 0 ? Math.max(...indices) + 1 : 0
+    return atoms.length
   }
 
   /**
@@ -586,7 +633,7 @@ export default class Atom {
    */
   static isotopeFilter(isotopes: AtomIsotope | AtomIsotope[], atoms: Atom[]): Atom[] {
     const targetIsotopes = Array.isArray(isotopes) ? isotopes : [isotopes]
-    return atoms.filter(atom => targetIsotopes.includes(atom.isotope))
+    return atoms.filter(atom => atom.isotope !== null && targetIsotopes.includes(atom.isotope))
   }
 
   // =============================================================================
@@ -614,7 +661,7 @@ export default class Atom {
   /**
    * Check if atom is a specific isotope type
    */
-  static isIsotope(atom: Atom, isotope: AtomIsotope): boolean {
+  static isIsotope(atom: Atom, isotope: AtomIsotope | null): boolean {
     return atom.isotope === isotope
   }
 
@@ -624,7 +671,9 @@ export default class Atom {
   static getUniqueIsotopes(atoms: Atom[]): AtomIsotope[] {
     const isotopes = new Set<AtomIsotope>()
     for (const atom of atoms) {
-      isotopes.add(atom.isotope)
+      if (atom.isotope !== null) {
+        isotopes.add(atom.isotope)
+      }
     }
     return Array.from(isotopes)
   }
@@ -643,14 +692,16 @@ export default class Atom {
    */
   static groupByIsotope(atoms: Atom[]): Record<AtomIsotope, Atom[]> {
     const groups: Partial<Record<AtomIsotope, Atom[]>> = {}
-    
+
     for (const atom of atoms) {
-      if (!groups[atom.isotope]) {
-        groups[atom.isotope] = []
+      const iso = atom.isotope
+      if (iso === null) continue
+      if (!groups[iso]) {
+        groups[iso] = []
       }
-      groups[atom.isotope]!.push(atom)
+      groups[iso]!.push(atom)
     }
-    
+
     return groups as Record<AtomIsotope, Atom[]>
   }
 }

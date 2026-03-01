@@ -390,11 +390,10 @@ export function isCellSlug(value: unknown): value is CellSlug {
 }
 
 /**
- * Batch ID validation (UUID format)
+ * Batch ID validation (64-char hex string, matching JS SDK)
  */
 export function isBatchId(value: unknown): value is BatchId {
-  return typeof value === 'string' && 
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  return typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value)
 }
 
 // =============================================================================

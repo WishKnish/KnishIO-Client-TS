@@ -61,8 +61,8 @@ import type { MetaData } from '@/types'
 
 export interface NormalizedMeta {
   key: string
-  value: string | number | boolean | null
-  [additionalProps: string]: unknown
+  value: string | null
+  [props: string]: unknown
 }
 
 export interface MetaItem {
@@ -95,37 +95,40 @@ export default class Meta {
       return []
     }
 
-    // Handle array of meta items
+    // Handle array of meta items — matches JS SDK exactly
     if (Array.isArray(meta)) {
       return meta.map(item => {
         if (typeof item === 'object' && item !== null && 'key' in item) {
           return {
-            ...item,
             key: String(item.key),
-            value: item.value as string | number | boolean | null
+            value: (item as any).value == null ? null : String((item as any).value)
           }
         }
-        
+
         // Fallback for invalid items
         return {
           key: 'unknown',
-          value: String(item) as string | number | boolean | null
+          value: String(item)
         }
       })
     }
 
-    // Handle object metadata - convert to array format
+    // Handle object metadata - convert to array format (matches JS SDK object path)
     if (typeof meta === 'object' && meta !== null) {
-      return Object.entries(meta).map(([key, value]) => ({
-        key,
-        value: value as string | number | boolean | null
-      }))
+      const target: NormalizedMeta[] = []
+      for (const property in meta) {
+        if (Object.prototype.hasOwnProperty.call(meta, property)) {
+          const raw = (meta as any)[property]
+          target.push({ key: property, value: raw == null ? null : String(raw) })
+        }
+      }
+      return target
     }
 
     // Handle primitive values
     return [{
       key: 'value',
-      value: meta as string | number | boolean | null
+      value: String(meta)
     }]
   }
 
@@ -264,7 +267,7 @@ export default class Meta {
     
     const newItem: NormalizedMeta = {
       key,
-      value: value as string | number | boolean | null
+      value: value == null ? null : String(value)
     }
     
     if (existingIndex >= 0) {
@@ -310,7 +313,7 @@ export default class Meta {
 
     return Object.entries(jsonData).map(([key, value]) => ({
       key,
-      value: value as string | number | boolean | null
+      value: value == null ? null : String(value)
     }))
   }
 

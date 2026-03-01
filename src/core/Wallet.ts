@@ -47,10 +47,10 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 */
 
 import JsSHA from 'jssha'
-import { randomString, chunkSubstr } from '@/libraries/strings'
+import { randomString, chunkSubstr, isHex } from '@/libraries/strings'
 import { generateBundleHash, generateSecret, shake256, generateBatchId } from '@/libraries/crypto'
 import WalletCredentialException from '@/exception/WalletCredentialException'
-import { isWalletAddress, isBundleHash, isPosition } from '@/types'
+import { isBundleHash } from '@/types'
 // Post-quantum cryptography for ML-KEM768 key encapsulation
 import { ml_kem768 } from '@noble/post-quantum/ml-kem.js'
 
@@ -60,7 +60,7 @@ import { ml_kem768 } from '@noble/post-quantum/ml-kem.js'
  */
 export default class Wallet {
   public token: string
-  public balance: number
+  public balance: string
   public address: string | null
   public position: string | null
   public bundle: string | null
@@ -97,18 +97,8 @@ export default class Wallet {
     batchId?: string | null
     characters?: string | null
   } = {}) {
-    // TypeScript 2025: Exhaustive validation with type guards
-    if (address !== null && !isWalletAddress(address)) {
-      throw new WalletCredentialException('Invalid wallet address format')
-    }
-    if (bundle !== null && !isBundleHash(bundle)) {
-      throw new WalletCredentialException('Invalid bundle hash format')
-    }
-    if (position !== null && !isPosition(position)) {
-      throw new WalletCredentialException('Invalid position format')
-    }
     this.token = token
-    this.balance = 0
+    this.balance = '0'
     this.molecules = {}
     
     // Empty values
@@ -165,7 +155,6 @@ export default class Wallet {
     characters?: string | null
   }): Wallet {
     let position: string | null = null
-    let address: string | null = null
 
     // No credentials parameters provided?
     if (!secret && !bundle) {
@@ -178,19 +167,9 @@ export default class Wallet {
       bundle = generateBundleHash(secret, 'Wallet::create')
     }
 
-    // Bundle but no secret? (Shadow wallet for transfers)
-    // Generate a random position and derive address from it
-    if (bundle && !secret) {
-      position = Wallet.generatePosition()
-      // For shadow wallets, derive address from bundle + position + token
-      // This creates a deterministic but unique address for this recipient position
-      const shadowKeySponge = new JsSHA('SHAKE256', 'TEXT')
-      shadowKeySponge.update(bundle + position + token)
-      address = shadowKeySponge.getHash('HEX', { outputLen: 256 })
-    }
-
-    // Wallet initialization
-    const wallet = new Wallet({
+    // Wallet initialization (matching JS SDK exactly)
+    // Bundle-only wallets (shadow) get no position/address generation
+    return new Wallet({
       secret,
       bundle,
       token,
@@ -198,13 +177,6 @@ export default class Wallet {
       batchId,
       characters
     })
-
-    // Set address for shadow wallet (if generated above)
-    if (address && !wallet.address) {
-      wallet.address = address
-    }
-
-    return wallet
   }
 
 
@@ -221,11 +193,15 @@ export default class Wallet {
     token: string
     position: string
   }): string {
+    // Normalize non-hex secret/position via SHAKE256 (matching JS/Rust SDKs)
+    const secretHex = isHex(secret) ? secret : shake256(secret, 1024)
+    const positionHex = isHex(position) ? position : shake256(position, 256)
+
     // Converting secret to bigInt
-    const bigIntSecret = BigInt(`0x${secret}`)
-    
+    const bigIntSecret = BigInt(`0x${secretHex}`)
+
     // Adding new position to the user secret to produce the indexed key
-    const indexedKey = bigIntSecret + BigInt(`0x${position}`)
+    const indexedKey = bigIntSecret + BigInt(`0x${positionHex}`)
     
     // Hashing the indexed key to produce the intermediate key
     // CRITICAL FIX: Use sponge pattern exactly like JavaScript SDK
