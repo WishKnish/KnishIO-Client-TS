@@ -1,6 +1,6 @@
 {
   "name": "@wishknish/knishio-client-ts",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "productName": "Knish.IO TypeScript SDK Client",
   "description": "TypeScript implementation of the Knish.IO SDK to consume Knish.IO GraphQL APIs with enhanced type safety.",
   "license": "GPL-3.0-or-later",
@@ -75,11 +75,11 @@
     "@types/jssha": "^3.0.0",
     "@types/node": "^22.8.1",
     "@types/pg": "^8.10.0",
-    "pg": "^8.11.0",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "eslint": "^9.16.0",
     "jest": "^30.2.0",
+    "pg": "^8.11.0",
     "prettier": "^3.4.2",
     "ts-jest": "^29.4.6",
     "tsup": "^8.3.5",
@@ -115,7 +115,7 @@
     "README.md",
     "LICENSE"
   ],
-  "packageManager": "yarn@4.10.3",
+  "packageManager": "yarn@4.6.0",
   "engines": {
     "node": ">=18.0.0"
   }
