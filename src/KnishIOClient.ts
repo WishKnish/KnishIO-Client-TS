@@ -433,6 +433,28 @@ export default class KnishIOClient {
     secret = secret || this.getSecret()
     bundle = bundle || this.getBundle()
 
+    // For non-USER source wallets (V/B isotopes), capture the current USER
+    // ContinuID position BEFORE overwriting the client's remainder wallet.
+    // This position is needed by addContinuIdAtom() for previousPosition metadata.
+    let continuIdPosition: string | null = null
+    if (sourceWallet && sourceWallet.token !== 'USER') {
+      if (this.lastMoleculeQuery &&
+        this.getRemainderWallet() &&
+        this.getRemainderWallet()?.token === 'USER' &&
+        this.lastMoleculeQuery.response() &&
+        this.lastMoleculeQuery.response()?.success()
+      ) {
+        // Carry-forward: use last successful USER remainder wallet position
+        continuIdPosition = this.getRemainderWallet()?.position || null
+        this.log('info', `KnishIOClient::createMolecule() - Captured USER ContinuID position ${continuIdPosition?.substring(0, 16)}... for non-USER source wallet`)
+      } else {
+        // Query server for current ContinuID position
+        const userWallet = await this.getSourceWallet()
+        continuIdPosition = userWallet?.position || null
+        this.log('info', `KnishIOClient::createMolecule() - Queried USER ContinuID position ${continuIdPosition?.substring(0, 16)}... for non-USER source wallet`)
+      }
+    }
+
     // Sets the source wallet as the last remainder wallet (to maintain ContinuID)
     if (!sourceWallet &&
       this.lastMoleculeQuery &&
@@ -463,7 +485,8 @@ export default class KnishIOClient {
       sourceWallet,
       remainderWallet: this.getRemainderWallet()!,
       cellSlug: this.getCellSlug(),
-      version: this.getServerSdkVersion()
+      version: this.getServerSdkVersion(),
+      continuIdPosition
     })
   }
 
@@ -1496,9 +1519,13 @@ export default class KnishIOClient {
       })
     }
 
-    // Create molecule with the source wallet (same pattern as transferToken)
+    // Create remainder wallet from source (must be same token for V-isotope conservation)
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+
+    // Create molecule with the token-specific source and remainder wallets
     const molecule = await this.createMolecule({
-      sourceWallet
+      sourceWallet,
+      remainderWallet
     })
 
     // Create a transfer to null address (burn)
@@ -1955,8 +1982,20 @@ export default class KnishIOClient {
       })
     }
 
+    // Create remainder wallet from source (must be same token)
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+
+    // Build the molecule with the token-specific source and remainder wallets
+    const molecule = await this.createMolecule({
+      sourceWallet,
+      remainderWallet
+    })
+
     // Create the molecule mutation
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationDepositBufferToken })
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationDepositBufferToken,
+      molecule
+    })
 
     // Initialize the deposit buffer token mutation
     await mutation.fillMolecule({

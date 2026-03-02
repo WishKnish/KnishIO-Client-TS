@@ -78,6 +78,7 @@ export default class Molecule {
   public remainderWallet: Wallet | null
   public atoms: Atom[]
   public version: string | null | undefined
+  public continuIdPosition: string | null
   public parentHashes: string[]
   public local?: number
 
@@ -91,7 +92,8 @@ export default class Molecule {
     sourceWallet = null,
     remainderWallet = null,
     cellSlug = null,
-    version = null
+    version = null,
+    continuIdPosition = null
   }: {
     secret?: string | null
     bundle?: string | null
@@ -99,6 +101,7 @@ export default class Molecule {
     remainderWallet?: Wallet | null
     cellSlug?: string | null
     version?: string | number | null
+    continuIdPosition?: string | null
   } = {}) {
     this.status = null
     this.molecularHash = null
@@ -107,6 +110,7 @@ export default class Molecule {
     this.secret = secret
     this.bundle = bundle
     this.sourceWallet = sourceWallet
+    this.continuIdPosition = continuIdPosition
     this.atoms = []
     this.parentHashes = []
 
@@ -209,8 +213,12 @@ export default class Molecule {
     // ContinuID metadata for chain integrity validation
     const continuIdMeta: Record<string, any> = {}
 
-    // previousPosition: the source wallet's position being consumed
-    if (this.sourceWallet && this.sourceWallet.position) {
+    // previousPosition: the current USER ContinuID position being consumed.
+    // For non-USER source wallets (V/B isotopes), use the explicitly passed
+    // continuIdPosition from createMolecule() instead of the TOKEN wallet position.
+    if (this.continuIdPosition) {
+      continuIdMeta.previousPosition = this.continuIdPosition
+    } else if (this.sourceWallet && this.sourceWallet.position) {
       continuIdMeta.previousPosition = this.sourceWallet.position
     }
 
@@ -661,13 +669,29 @@ export default class Molecule {
       throw new BalanceInsufficientException()
     }
 
-    // Burn tokens by removing from source (matching JS SDK)
+    // Create burn address wallet (null bundle = token destruction)
+    const burnWallet = new Wallet({
+      bundle: '0000000000000000000000000000000000000000000000000000000000000000',
+      token: this.sourceWallet.token
+    })
+
+    // V-atom 1: Debit full balance from source
     this.addAtom(Atom.create({
       isotope: 'V',
       wallet: this.sourceWallet,
-      value: -amount
+      value: -Number(this.sourceWallet.balance)
     }))
-    // Remainder atom (matching JS SDK)
+
+    // V-atom 2: Credit burn amount to burn address
+    this.addAtom(Atom.create({
+      isotope: 'V',
+      wallet: burnWallet,
+      value: amount,
+      metaType: 'walletBundle',
+      metaId: burnWallet.bundle!
+    }))
+
+    // V-atom 3: Remainder back to source identity
     this.addAtom(Atom.create({
       isotope: 'V',
       wallet: this.remainderWallet!,
