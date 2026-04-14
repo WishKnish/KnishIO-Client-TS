@@ -84,6 +84,7 @@ import QueryUserActivity from '@/query/QueryUserActivity'
 import QueryToken from '@/query/QueryToken'
 import QueryMetaTypeViaAtom from '@/query/QueryMetaTypeViaAtom'
 import QueryMetaTypeViaMolecule from '@/query/QueryMetaTypeViaMolecule'
+import QueryEmbeddingStatus from '@/query/QueryEmbeddingStatus'
 
 // Mutation imports
 import MutationCreateToken from '@/mutation/MutationCreateToken'
@@ -150,6 +151,7 @@ export default class KnishIOClient {
   private $__remainderWallet: Wallet | null = null
   private lastMoleculeQuery: Mutation | null = null
   private abortControllers: Map<string, AbortController> = new Map()
+  private $__capabilityCache: Record<string, boolean> = {}
 
   /**
    * Enhanced constructor with standardized configuration validation (Phase 2 Enhancement)
@@ -320,6 +322,7 @@ export default class KnishIOClient {
     this.$__authToken = null
     this.$__remainderWallet = null
     this.lastMoleculeQuery = null
+    this.$__capabilityCache = {}
   }
 
   /**
@@ -1058,6 +1061,76 @@ export default class KnishIOClient {
       payload.integrity = (response as any).verifyIntegrity()
     }
     return response
+  }
+
+  /**
+   * Probes the connected server to check whether it supports a named root query field.
+   * Result is cached per URI so the network round-trip happens at most once per URI.
+   *
+   * Uses GraphQL introspection which is universally supported by spec-compliant servers.
+   *
+   * @param fieldName - The root Query field name to check (e.g. 'embeddingStatus')
+   * @returns true if the server schema includes the field, false otherwise
+   */
+  async hasQueryField(fieldName: string): Promise<boolean> {
+    const uri = this.$__client.getUri()
+    const cacheKey = `${uri}::${fieldName}`
+
+    if (typeof this.$__capabilityCache[cacheKey] === 'boolean') {
+      return this.$__capabilityCache[cacheKey]!
+    }
+
+    try {
+      const result = await this.$__client.query({
+        query: '{ __schema { queryType { fields { name } } } }',
+        variables: {}
+      })
+
+      const data = result?.data as Record<string, any> | undefined
+      const fields: Array<{ name: string }> = data?.__schema?.queryType?.fields || []
+      const supported = fields.some((f: { name: string }) => f.name === fieldName)
+      this.$__capabilityCache[cacheKey] = supported
+      return supported
+    } catch (err: any) {
+      this.log('warn', `KnishIOClient::hasQueryField() - Capability probe for '${fieldName}' failed: ${err.message}`)
+      this.$__capabilityCache[cacheKey] = false
+      return false
+    }
+  }
+
+  /**
+   * Queries embedding status for one or more meta instances (DataBraid observability).
+   *
+   * If the connected server does not support the embeddingStatus query,
+   * returns null without throwing an error (graceful degradation).
+   *
+   * Single mode: queryEmbeddingStatus({ metaType: 'product', metaId: 'SKU-001' })
+   * Bulk mode:   queryEmbeddingStatus({ instances: [{ metaType: 'product', metaId: 'SKU-001' }, ...] })
+   *
+   * @returns Response with payload(), or null if the server does not support this query
+   */
+  async queryEmbeddingStatus({
+    metaType = null,
+    metaId = null,
+    instances = null
+  }: {
+    metaType?: string | null
+    metaId?: string | null
+    instances?: Array<{ metaType: string; metaId: string }> | null
+  }): Promise<Response | null> {
+    this.log('info', `KnishIOClient::queryEmbeddingStatus() - Checking embedding status for metaType: ${metaType || '(bulk)'}...`)
+
+    const supported = await this.hasQueryField('embeddingStatus')
+
+    if (!supported) {
+      this.log('warn', 'KnishIOClient::queryEmbeddingStatus() - Server does not support embeddingStatus query. Returning null.')
+      return null
+    }
+
+    const query = this.createQuery(QueryEmbeddingStatus)
+    const variables = QueryEmbeddingStatus.createVariables({ metaType, metaId, instances })
+
+    return this.executeQuery(query, variables)
   }
 
   /**

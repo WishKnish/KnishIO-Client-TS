@@ -94,6 +94,9 @@ export { default as QueryAtom } from './query/QueryAtom'
 export { default as QueryMetaType } from './query/QueryMetaType'
 export { default as QueryMetaTypeViaAtom } from './query/QueryMetaTypeViaAtom'
 
+// DataBraid Embedding Observability
+export { default as QueryEmbeddingStatus } from './query/QueryEmbeddingStatus'
+
 // Phase 2 Tier 2 Priority 3: Essential Query Operations
 export { default as QueryContinuId } from './query/QueryContinuId'
 export { default as QueryBatch } from './query/QueryBatch'
@@ -133,6 +136,10 @@ export { default as ResponseRequestAuthorization } from './response/ResponseRequ
 export { default as ResponseCreateMeta } from './response/ResponseCreateMeta'
 export { default as ResponseMetaType } from './response/ResponseMetaType'
 export { default as ResponseMetaTypeViaAtom } from './response/ResponseMetaTypeViaAtom'
+
+// DataBraid Embedding Observability
+export { default as ResponseEmbeddingStatus } from './response/ResponseEmbeddingStatus'
+export type { EmbeddingStatusItem } from './response/ResponseEmbeddingStatus'
 
 // Phase 2 Tier 2 Priority 2: Token Operations
 export { default as ResponseCreateToken } from './response/ResponseCreateToken'
