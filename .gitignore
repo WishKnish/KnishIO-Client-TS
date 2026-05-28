@@ -130,3 +130,9 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# macOS
+**/.DS_Store
+
+# npm artifact when yarn is canonical
+package-lock.json
+
