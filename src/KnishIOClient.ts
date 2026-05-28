@@ -103,6 +103,10 @@ import MutationRequestAuthorizationGuest from '@/mutation/MutationRequestAuthori
 import MutationLinkIdentifier from '@/mutation/MutationLinkIdentifier'
 import MutationPeering from '@/mutation/MutationPeering'
 import MutationAppendRequest from '@/mutation/MutationAppendRequest'
+import MutationProposeMolecule from '@/mutation/MutationProposeMolecule'
+
+// Response imports
+import ResponseProposeMolecule from '@/response/ResponseProposeMolecule'
 
 // Subscribe imports
 import CreateMoleculeSubscribe from '@/subscribe/CreateMoleculeSubscribe'
@@ -117,7 +121,10 @@ import {
   TransferBalanceException,
   WalletShadowException,
   StackableUnitAmountException,
-  AuthorizationRejectedException
+  AuthorizationRejectedException,
+  MolecularHashMismatchException,
+  SignatureMismatchException,
+  AtomIndexException
 } from '@/exception'
 
 // Type imports
@@ -152,6 +159,12 @@ export default class KnishIOClient {
   private lastMoleculeQuery: Mutation | null = null
   private abortControllers: Map<string, AbortController> = new Map()
   private $__capabilityCache: Record<string, boolean> = {}
+  // Promise-chain mutex serializing MutationProposeMolecule submissions on this
+  // client. Without it, concurrent createMolecule() calls both query the same
+  // ContinuID position and both sign with it — the second is rejected with
+  // OTS position reuse. Auth-token flow (MutationRequestAuthorization) inherits
+  // from MutationProposeMolecule so it's covered by the same lock.
+  private $__moleculeChain: Promise<unknown> = Promise.resolve()
 
   /**
    * Enhanced constructor with standardized configuration validation (Phase 2 Enhancement)
@@ -521,6 +534,24 @@ export default class KnishIOClient {
   }
 
   /**
+   * Serializes the given async work behind a per-client promise chain. Used to
+   * guarantee that at most one MutationProposeMolecule submission runs at a
+   * time on this client — query position, sign, submit, observe response must
+   * complete before the next one starts, or two callers race for the same OTS
+   * position and the second gets rejected.
+   *
+   * `.then(fn, fn)` runs fn whether the previous holder resolved or rejected;
+   * the queue's `.catch` swallows the rejection so a single failure doesn't
+   * poison every subsequent caller, while the rejection still propagates to
+   * the caller whose fn threw.
+   */
+  private withMoleculeLock<T>(fn: () => Promise<T>): Promise<T> {
+    const result = (this.$__moleculeChain as Promise<unknown>).then(fn, fn) as Promise<T>
+    this.$__moleculeChain = result.catch(() => undefined)
+    return result
+  }
+
+  /**
    * Executes a query or mutation
    */
   async executeQuery(query: Query | Mutation, variables: Record<string, any> | null = null): Promise<Response | null> {
@@ -535,8 +566,40 @@ export default class KnishIOClient {
       })
     }
 
+    if (query instanceof MutationProposeMolecule) {
+      return await this.withMoleculeLock(async () => {
+        const response = await query.execute({ variables: variables || {} })
+        this.handlePositionDrift(response)
+        return response
+      })
+    }
+
     // Execute the query
     return await query.execute({ variables: variables || {} })
+  }
+
+  /**
+   * When a ProposeMolecule submission is rejected for a position-related
+   * reason (OTS reuse, ContinuID chain violation, molecular hash mismatch),
+   * the cached remainder wallet and lastMoleculeQuery are stale — the
+   * validator's chain has advanced past what we know. Clear them so the next
+   * createMolecule call re-queries queryContinuId for the authoritative
+   * position. Other failure modes (network, malformed meta, bad signature
+   * bytes) don't imply drift; leave cached state alone.
+   */
+  private handlePositionDrift(response: Response | null): void {
+    if (!(response instanceof ResponseProposeMolecule)) return
+    const exc = response.toException()
+    if (!exc) return
+    if (
+      exc instanceof MolecularHashMismatchException ||
+      exc instanceof AtomIndexException ||
+      (exc instanceof SignatureMismatchException && exc.code === 'OTS_VERIFICATION_FAILED')
+    ) {
+      this.$__remainderWallet = null
+      this.lastMoleculeQuery = null
+      this.log('warn', `KnishIOClient::executeQuery() - position drift detected (${exc.name}/${exc.code}); cleared cached remainder wallet`)
+    }
   }
 
   /**

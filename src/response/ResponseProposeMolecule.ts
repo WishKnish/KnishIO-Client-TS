@@ -50,6 +50,10 @@ import Response from './Response'
 import Dot from '../libraries/Dot'
 import Molecule from '../core/Molecule'
 import type Query from '../query/Query'
+import type BaseException from '../exception/BaseException'
+import MolecularHashMismatchException from '../exception/MolecularHashMismatchException'
+import SignatureMismatchException from '../exception/SignatureMismatchException'
+import AtomIndexException from '../exception/AtomIndexException'
 
 /**
  * Response for proposing new Molecules
@@ -141,6 +145,49 @@ export default class ResponseProposeMolecule extends Response {
    */
   override reason(): string {
     return Dot.get(this.data(), 'reason', 'Invalid response from server') as string
+  }
+
+  /**
+   * Map this rejection to a typed SDK exception when the failure mode is one
+   * we know about. Returns null on success or for rejections we don't have a
+   * typed class for.
+   *
+   * This is the single place pattern-matching against validator reason strings
+   * lives — consumers (KnishIOClient cache invalidation, callers needing to
+   * branch on failure mode) can `instanceof`-switch on the result instead.
+   * Future validator versions can rephrase reasons (or populate a structured
+   * field in the response payload) without breaking callers.
+   */
+  toException(): BaseException | null {
+    if (this.success()) return null
+    const reason = this.reason()
+    const lc = reason.toLowerCase()
+
+    if (/molecularhashmismatch|hash.*mismatch/.test(lc)) {
+      return new MolecularHashMismatchException(reason, {
+        details: { reason },
+        code: 'HASH_MISMATCH'
+      })
+    }
+    if (/ots.*position.*reuse|position.*already.*used|ots.*verification/.test(lc)) {
+      return new SignatureMismatchException(reason, {
+        details: { reason },
+        code: 'OTS_VERIFICATION_FAILED'
+      })
+    }
+    if (/continuid.*chain|previousposition|chain.*violation/.test(lc)) {
+      return new AtomIndexException(reason, {
+        details: { reason },
+        code: 'INDEX_CONFLICT'
+      })
+    }
+    if (/signature.*verification|signature.*invalid/.test(lc)) {
+      return new SignatureMismatchException(reason, {
+        details: { reason },
+        code: 'VERIFICATION_FAILED'
+      })
+    }
+    return null
   }
 
   /**
