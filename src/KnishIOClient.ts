@@ -361,6 +361,20 @@ export default class KnishIOClient {
   }
 
   /**
+   * Sets the WebSocket (subscription) endpoint for this session.
+   *
+   * F-8a (cross-SDK parity, 2026-06-03): `setUri` only updates the HTTP endpoint; the
+   * subscription socket is built once from the `socket.socketUri` passed at
+   * construction. This lets a caller re-point the socket when the endpoint changes
+   * (mirrors the JS SDK's `setSocketUri`).
+   */
+  setSocketUri(socketUri: string): void {
+    if (this.$__client && 'setSocketUri' in this.$__client) {
+      (this.$__client as any).setSocketUri(socketUri)
+    }
+  }
+
+  /**
    * Gets the Knish.IO server URIs
    */
   getUri(): string[] {

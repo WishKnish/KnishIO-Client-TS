@@ -259,14 +259,13 @@ export default class Molecule {
     const atomMeta = new AtomMeta(meta)
     atomMeta.addPolicy(policy)
 
-    const wallet = Wallet.create({
-      secret: this.secret!,
-      bundle: this.sourceWallet!.bundle!,
-      token: 'USER'
-    })
-
+    // F-3 (cross-SDK parity, 2026-06-03): sign the policy (R-isotope) atom from the
+    // established ContinuID source wallet, NOT a freshly-derived Wallet.create() at a
+    // random position. As the signing atom in createPolicy(), a fresh-wallet position
+    // is unknown to the validator → "ContinuID chain validation failed: signing
+    // position … not found as wallet". Mirrors createRule(), which uses this.sourceWallet.
     this.addAtom(Atom.create({
-      wallet,
+      wallet: this.sourceWallet!,
       isotope: 'R',
       metaType,
       metaId,

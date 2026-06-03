@@ -301,6 +301,21 @@ export default class GraphQLClient implements IGraphQLClient {
     })
   }
 
+  /**
+   * F-8a (cross-SDK parity, 2026-06-03): re-point the GraphQL-subscription WebSocket
+   * without changing the HTTP endpoint. `setUri` only updates `serverUri`, leaving the
+   * subscription socket pinned to whatever was passed at construction; this lets a
+   * caller re-derive the socket when the endpoint changes.
+   */
+  setSocketUri(socketUri: string): void {
+    this.socketUri = socketUri
+    this.$__client = this.createUrqlClient({
+      serverUri: this.serverUri,
+      socket: { socketUri },
+      encrypt: this.cipherLink
+    })
+  }
+
   socketDisconnect(): void {
     if (this.socketUri) {
       this.unsubscribeAll()
