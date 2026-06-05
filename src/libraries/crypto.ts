@@ -143,8 +143,9 @@ export function generateSecret(seed: string | null = null, length: number = CRYP
     // Deterministic generation using SHAKE256 - MUST match JS SDK
     const sponge = new JsSHA('SHAKE256', 'TEXT')
     sponge.update(seed)
-    // Fix: outputLen is in BITS, so for 1024 hex chars output, we need length*2 bits (matching JS SDK)
-    return sponge.getHash('HEX', { outputLen: length * 2 }).toLowerCase()
+    // outputLen is in BITS. For `length` hex chars = length/2 bytes = length*4 bits.
+    // (SECRET_LENGTH=2048 → 8192 bits → 1024 bytes → 2048 hex chars, matching all SDKs.)
+    return sponge.getHash('HEX', { outputLen: length * 4 }).toLowerCase()
   } else {
     // Cryptographically secure random generation
     return randomString(length)
