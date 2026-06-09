@@ -71,6 +71,7 @@ export default class QueryActiveSession extends Query {
           metaId
           jsonData
           createdAt
+          updatedAt
         }
       }
     `
