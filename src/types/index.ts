@@ -375,6 +375,13 @@ export interface GraphQLRequest {
   query: string
   variables?: Record<string, unknown>
   operationName?: string | null
+  /**
+   * Per-operation urql context (e.g. `{ requestPolicy: 'network-only' }`).
+   * Built by Query.execute() from createQueryContext() + per-call context and
+   * MUST be forwarded to the urql client, or requestPolicy is silently ignored
+   * and urql falls back to its default cache-first policy.
+   */
+  context?: Record<string, unknown>
 }
 
 export interface GraphQLResponse<T = unknown> {

@@ -159,18 +159,21 @@ export default class GraphQLClient implements IGraphQLClient {
   async query<TResult = unknown>(
     request: GraphQLRequest
   ): Promise<GraphQLResponse<TResult>> {
-    const { query, variables } = request
-    const result = await this.$__client.query(query, variables || {}).toPromise()
+    const { query, variables, context } = request
+    // Forward the urql context (e.g. requestPolicy: 'network-only'). Without
+    // this 3rd arg urql ignores requestPolicy and defaults to cache-first,
+    // serving stale results from a long-lived client's in-memory cache.
+    const result = await this.$__client.query(query, variables || {}, context).toPromise()
     return this.formatResponse<TResult>(result)
   }
 
   async mutation<TResult = unknown>(
     request: GraphQLRequest
   ): Promise<GraphQLResponse<TResult>> {
-    const { query, variables } = request
+    const { query, variables, context } = request
     // Support both query and mutation properties for backward compatibility
     const mutationString = (request as any).mutation || query
-    const result = await this.$__client.mutation(mutationString, variables || {}).toPromise()
+    const result = await this.$__client.mutation(mutationString, variables || {}, context).toPromise()
     return this.formatResponse<TResult>(result)
   }
 

@@ -568,7 +568,11 @@ export default class KnishIOClient {
   /**
    * Executes a query or mutation
    */
-  async executeQuery(query: Query | Mutation, variables: Record<string, any> | null = null): Promise<Response | null> {
+  async executeQuery(
+    query: Query | Mutation,
+    variables: Record<string, any> | null = null,
+    context: Record<string, any> = {}
+  ): Promise<Response | null> {
     // Check and refresh authorization token if needed
     // Guard with $__authInProcess to prevent recursive auth refresh
     if (this.$__authToken && this.$__authToken.isExpired() && !this.$__authInProcess) {
@@ -581,6 +585,8 @@ export default class KnishIOClient {
     }
 
     if (query instanceof MutationProposeMolecule) {
+      // Molecule submissions are writes — never cached, so no request-policy
+      // context applies; MutationProposeMolecule.execute takes only variables.
       return await this.withMoleculeLock(async () => {
         const response = await query.execute({ variables: variables || {} })
         this.handlePositionDrift(response)
@@ -588,8 +594,9 @@ export default class KnishIOClient {
       })
     }
 
-    // Execute the query
-    return await query.execute({ variables: variables || {} })
+    // Execute the query/mutation, forwarding any urql context (e.g.
+    // requestPolicy) assembled by the caller (queryMeta) / createQueryContext().
+    return await query.execute({ variables: variables || {}, context })
   }
 
   /**
@@ -1038,7 +1045,8 @@ export default class KnishIOClient {
     throughMolecule = false,
     values = null,
     keys = null,
-    atomValues = null
+    atomValues = null,
+    requestPolicy = null
   }: {
     metaType: MetaType | string
     metaId?: MetaId | string | null
@@ -1055,6 +1063,12 @@ export default class KnishIOClient {
     values?: any[] | null
     keys?: string[] | null
     atomValues?: any[] | null
+    /**
+     * urql request policy for this read. Pass 'network-only' to bypass the
+     * client's in-memory cache (e.g. sync engines that must see the current
+     * ledger state). Default null = urql's default (cache-first).
+     */
+    requestPolicy?: 'cache-first' | 'cache-only' | 'network-only' | 'cache-and-network' | null
   }): Promise<Response> {
     this.log('info', `KnishIOClient::queryMeta() - Querying metaType: ${metaType}, metaId: ${metaId}...`)
 
@@ -1109,7 +1123,8 @@ export default class KnishIOClient {
       })
     }
 
-    return this.executeQuery(query, variables) as Promise<Response>
+    const context = requestPolicy ? { requestPolicy } : {}
+    return this.executeQuery(query, variables, context) as Promise<Response>
   }
 
   /**
