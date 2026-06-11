@@ -206,7 +206,11 @@ export const KnishIOClientConfigSchema = z.object({
   client: z.unknown().optional(),
   socket: z.unknown().optional(),
   serverSdkVersion: z.number().int().min(1).max(10).default(4),
-  logging: z.boolean().default(false)
+  logging: z.boolean().default(false),
+  // Optional default urql request policy for reads (server/sync clients pass
+  // 'network-only'). Permitted by the strict schema so the constructor option
+  // isn't rejected.
+  defaultRequestPolicy: z.enum(['cache-first', 'cache-only', 'network-only', 'cache-and-network']).nullable().optional()
 }).strict()
 
 // Environment configuration with validation

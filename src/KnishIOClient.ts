@@ -136,7 +136,8 @@ import type {
   MetaType,
   MetaId,
   BatchId,
-  MetaFilter
+  MetaFilter,
+  RequestPolicy
 } from '@/types'
 
 /**
@@ -152,6 +153,10 @@ export default class KnishIOClient {
   private $__client!: GraphQLClient
   private $__serverSdkVersion: number = 3
   private $__logging: boolean = false
+  // Default urql request policy applied to reads when the caller doesn't pass
+  // one. null = urql's default (cache-first). Server/sync clients set this to
+  // 'network-only' so a long-lived client never serves a stale cached read.
+  private $__defaultRequestPolicy: RequestPolicy | null = null
   private $__authTokenObjects: Record<string, AuthToken | null> = {}
   private $__authToken: AuthToken | null = null
   private $__authInProcess: boolean = false
@@ -176,6 +181,7 @@ export default class KnishIOClient {
     socket?: { socketUri: string | null; appKey?: string } | null
     serverSdkVersion?: number
     logging?: boolean
+    defaultRequestPolicy?: RequestPolicy | null
   }) {
     // Phase 2 Enhancement: Use standardized configuration validation
     const standardValidationResult = ConfigValidator.validateClientConfig(config)
@@ -213,14 +219,19 @@ export default class KnishIOClient {
       serverSdkVersion = 3,
       logging = false
     } = validatedConfig
-    
+    // Read from the RAW config: defaultRequestPolicy is an optional add-on the
+    // strict schema now permits, but the validated/inferred shape may not carry
+    // it depending on the parser, so take it straight from the caller's config.
+    const defaultRequestPolicy = (config.defaultRequestPolicy ?? null) as RequestPolicy | null
+
     this.initialize({
       uri: uri as string | string[],
       cellSlug: cellSlug as string | null,
       socket: socket as { socketUri: string | null; appKey?: string } | null,
       client: client as GraphQLClient | null,
       serverSdkVersion,
-      logging
+      logging,
+      defaultRequestPolicy
     })
   }
 
@@ -233,7 +244,8 @@ export default class KnishIOClient {
     socket = null,
     client = null,
     serverSdkVersion = 3,
-    logging = false
+    logging = false,
+    defaultRequestPolicy = null
   }: {
     uri: string | string[]
     cellSlug?: string | null
@@ -241,6 +253,7 @@ export default class KnishIOClient {
     client?: GraphQLClient | null
     serverSdkVersion?: number
     logging?: boolean
+    defaultRequestPolicy?: RequestPolicy | null
   }): void {
     this.reset()
 
@@ -269,6 +282,9 @@ export default class KnishIOClient {
     })
 
     this.$__serverSdkVersion = serverSdkVersion
+    // Config (not session state) — set here, NOT cleared in reset(), mirroring
+    // serverSdkVersion. A re-initialize updates it.
+    this.$__defaultRequestPolicy = defaultRequestPolicy
   }
 
   /**
@@ -322,6 +338,22 @@ export default class KnishIOClient {
    */
   getServerSdkVersion(): number {
     return this.$__serverSdkVersion
+  }
+
+  /**
+   * Gets the client's default urql request policy (null = urql default).
+   */
+  getDefaultRequestPolicy(): RequestPolicy | null {
+    return this.$__defaultRequestPolicy
+  }
+
+  /**
+   * Sets the default urql request policy applied to reads that don't specify
+   * one. Pass 'network-only' on a long-lived server/sync client so it never
+   * serves a stale cached read; null restores urql's default (cache-first).
+   */
+  setDefaultRequestPolicy(policy: RequestPolicy | null): void {
+    this.$__defaultRequestPolicy = policy
   }
 
   /**
@@ -596,7 +628,16 @@ export default class KnishIOClient {
 
     // Execute the query/mutation, forwarding any urql context (e.g.
     // requestPolicy) assembled by the caller (queryMeta) / createQueryContext().
-    return await query.execute({ variables: variables || {}, context })
+    // When the caller did NOT specify a request policy, fall back to this
+    // client's defaultRequestPolicy (e.g. a long-lived server/sync client set
+    // to 'network-only' so it never serves a stale read from the urql cache —
+    // removing the footgun of having to pass network-only on every call).
+    // Precedence: per-call context.requestPolicy > client default > a query's
+    // own createQueryContext() (e.g. ContinuId) > urql default.
+    const effectiveContext = (this.$__defaultRequestPolicy && !(context as Record<string, any>).requestPolicy)
+      ? { requestPolicy: this.$__defaultRequestPolicy, ...context }
+      : context
+    return await query.execute({ variables: variables || {}, context: effectiveContext })
   }
 
   /**

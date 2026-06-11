@@ -371,6 +371,12 @@ export interface SignatureResult {
 // GRAPHQL OPERATION TYPES
 // =============================================================================
 
+/**
+ * urql request policy (mirrors @urql/core's RequestPolicy). Controls whether a
+ * read hits the client's in-memory cache. 'network-only' bypasses it entirely.
+ */
+export type RequestPolicy = 'cache-first' | 'cache-only' | 'network-only' | 'cache-and-network'
+
 export interface GraphQLRequest {
   query: string
   variables?: Record<string, unknown>
