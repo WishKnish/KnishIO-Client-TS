@@ -340,7 +340,7 @@ async function testMetaCreation() {
     logTest('Molecule validation', isValid, validationError);
     
     // Store serialized molecule for cross-SDK verification
-    results.molecules.metadata = JSON.stringify(molecule);
+    results.molecules.metadata = JSON.stringify(molecule.toJSON({ includeValidationContext: true }));
     
     results.tests.metaCreation = {
       passed: isValid,
@@ -444,7 +444,7 @@ async function testSimpleTransfer() {
     logTest('Molecule validation', isValid, validationError);
     
     // Store serialized molecule for cross-SDK verification
-    results.molecules.simpleTransfer = JSON.stringify(molecule);
+    results.molecules.simpleTransfer = JSON.stringify(molecule.toJSON({ includeValidationContext: true }));
     
     results.tests.simpleTransfer = {
       passed: isValid,
@@ -553,7 +553,7 @@ async function testComplexTransfer() {
     logTest('Molecule validation', isValid, validationError);
     
     // Store serialized molecule for cross-SDK verification
-    results.molecules.complexTransfer = JSON.stringify(molecule);
+    results.molecules.complexTransfer = JSON.stringify(molecule.toJSON({ includeValidationContext: true }));
     
     results.tests.complexTransfer = {
       passed: isValid,
