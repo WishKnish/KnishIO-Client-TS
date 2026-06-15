@@ -107,6 +107,22 @@ const DEFAULT_CONFIG = {
       sourcePosition: "0123456789abcdeffedcba9876543210fedcba9876543210fedcba9876543210",
       recipientPosition: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
       meta: { name: "Test Token", fungibility: "fungible", supply: "limited", decimals: "0" }
+    },
+    walletCreation: {
+      sourceSeed: "TESTSEED",
+      newWalletSeed: "NEWWALLETSEED",
+      sourceToken: "USER",
+      newToken: "TESTTOKEN",
+      sourcePosition: "0123456789abcdeffedcba9876543210fedcba9876543210fedcba9876543210",
+      newWalletPosition: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+    },
+    shadowWalletClaim: {
+      sourceSeed: "TESTSEED",
+      claimSeed: "CLAIMSEED",
+      sourceToken: "USER",
+      claimToken: "TESTTOKEN",
+      sourcePosition: "0123456789abcdeffedcba9876543210fedcba9876543210fedcba9876543210",
+      claimPosition: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
     }
   }
 };
@@ -645,6 +661,118 @@ async function testTokenCreation() {
   }
 }
 
+async function testWalletCreation() {
+  log('\nC2. Wallet Creation Test', 'blue');
+  const testConfig = config.tests.walletCreation;
+  try {
+    const sourceSecret = generateSecret(testConfig.sourceSeed);
+    const sourceBundle = generateBundleHash(sourceSecret);
+    const sourceWallet = new Wallet({ secret: sourceSecret, token: testConfig.sourceToken, position: testConfig.sourcePosition });
+    logTest('Source wallet creation', true);
+
+    const newWallet = new Wallet({ secret: generateSecret(testConfig.newWalletSeed), token: testConfig.newToken, position: testConfig.newWalletPosition });
+    logTest('New wallet creation', true);
+
+    // USER-token remainder so addContinuIdAtom's guard keeps the canonical bbbb... wallet
+    const remainderWallet = createFixedRemainderWallet(sourceSecret, testConfig.sourceToken);
+
+    const molecule = new Molecule({ secret: sourceSecret, bundle: sourceBundle, sourceWallet: sourceWallet, remainderWallet: remainderWallet });
+    molecule.initWalletCreation(newWallet);
+    logTest('Wallet creation initialization', true);
+
+    setFixedTimestamps(molecule);
+    molecule.sign({});
+    logTest('Molecule signing', true);
+
+    inspectMolecule(molecule, 'wallet creation molecule');
+
+    let isValid = false;
+    let validationError = null;
+    try {
+      isValid = molecule.check(sourceWallet);
+      if (!isValid) {
+        validationError = 'Validation returned false (no exception thrown)';
+      }
+    } catch (error) {
+      isValid = false;
+      validationError = error.message;
+    }
+    logTest('Molecule validation', isValid, validationError);
+
+    results.molecules.walletCreation = JSON.stringify(molecule.toJSON({ includeValidationContext: true }));
+    results.tests.walletCreation = {
+      passed: isValid,
+      molecularHash: molecule.molecularHash,
+      atomCount: molecule.atoms.length,
+      validationError: validationError
+    };
+    return isValid;
+  } catch (error) {
+    log(`  ❌ ERROR: ${error.message}`, 'red');
+    results.tests.walletCreation = {
+      passed: false,
+      error: error.message
+    };
+    return false;
+  }
+}
+
+async function testShadowWalletClaim() {
+  log('\nC3. Shadow Wallet Claim Test', 'blue');
+  const testConfig = config.tests.shadowWalletClaim;
+  try {
+    const sourceSecret = generateSecret(testConfig.sourceSeed);
+    const sourceBundle = generateBundleHash(sourceSecret);
+    const sourceWallet = new Wallet({ secret: sourceSecret, token: testConfig.sourceToken, position: testConfig.sourcePosition });
+    logTest('Source wallet creation', true);
+
+    const claimWallet = new Wallet({ secret: generateSecret(testConfig.claimSeed), token: testConfig.claimToken, position: testConfig.claimPosition });
+    logTest('Claim wallet creation', true);
+
+    // USER-token remainder so addContinuIdAtom's guard keeps the canonical bbbb... wallet
+    const remainderWallet = createFixedRemainderWallet(sourceSecret, testConfig.sourceToken);
+
+    const molecule = new Molecule({ secret: sourceSecret, bundle: sourceBundle, sourceWallet: sourceWallet, remainderWallet: remainderWallet });
+    molecule.initShadowWalletClaim(claimWallet);
+    logTest('Shadow wallet claim initialization', true);
+
+    setFixedTimestamps(molecule);
+    molecule.sign({});
+    logTest('Molecule signing', true);
+
+    inspectMolecule(molecule, 'shadow wallet claim molecule');
+
+    let isValid = false;
+    let validationError = null;
+    try {
+      isValid = molecule.check(sourceWallet);
+      if (!isValid) {
+        validationError = 'Validation returned false (no exception thrown)';
+      }
+    } catch (error) {
+      isValid = false;
+      validationError = error.message;
+    }
+    logTest('Molecule validation', isValid, validationError);
+
+    results.molecules.shadowWalletClaim = JSON.stringify(molecule.toJSON({ includeValidationContext: true }));
+    results.tests.shadowWalletClaim = {
+      passed: isValid,
+      molecularHash: molecule.molecularHash,
+      atomCount: molecule.atoms.length,
+      validationError: validationError
+    };
+    return isValid;
+  } catch (error) {
+    log(`  ❌ ERROR: ${error.message}`, 'red');
+    results.tests.shadowWalletClaim = {
+      passed: false,
+      error: error.message
+    };
+    return false;
+  }
+}
+
 /**
  * Test 5: ML-KEM768 Encryption Test
  * Tests post-quantum encryption/decryption compatibility
@@ -1105,6 +1233,8 @@ async function main() {
     const simplePassed = await testSimpleTransfer();
     const complexPassed = await testComplexTransfer();
     const tokenCreationPassed = await testTokenCreation();
+    const walletCreationPassed = await testWalletCreation();
+    const shadowWalletClaimPassed = await testShadowWalletClaim();
     const mlkemPassed = await testMLKEM768();
     const negativePassed = await testNegativeCases();
     const crossSdkPassed = await testCrossSdkValidation();
