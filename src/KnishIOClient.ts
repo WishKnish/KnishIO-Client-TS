@@ -50,7 +50,8 @@ import Decimal from '@/libraries/Decimal'
 import GraphQLClient from '@/libraries/GraphQLClient'
 import {
   generateBundleHash,
-  generateSecret
+  generateSecret,
+  generateBatchId
 } from '@/libraries/crypto'
 import Molecule from '@/core/Molecule'
 import Wallet from '@/core/Wallet'
@@ -121,6 +122,7 @@ import {
   TransferBalanceException,
   WalletShadowException,
   StackableUnitAmountException,
+  StackableUnitDecimalsException,
   AuthorizationRejectedException,
   MolecularHashMismatchException,
   SignatureMismatchException,
@@ -137,7 +139,8 @@ import type {
   MetaId,
   BatchId,
   MetaFilter,
-  RequestPolicy
+  RequestPolicy,
+  TransferRecipientInput
 } from '@/types'
 
 /**
@@ -796,6 +799,96 @@ export default class KnishIOClient {
     query.fillMolecule({
       recipientWallet,
       amount
+    })
+
+    return await this.executeQuery(query)
+  }
+
+  /**
+   * Fund N recipients from a single source in ONE molecule (multi-recipient sibling of
+   * transferToken). Each recipient gets its own subset of stackable units (or a fungible
+   * amount); a remainder returns the rest to the sender. Conserves:
+   * -balance + Σamounts + (balance - Σ) === 0.
+   *
+   * @param token - token slug
+   * @param recipients - destinations (bundleHash + units OR amount + optional batchId)
+   * @param sourceWallet - optional pre-resolved source (defaults to the client's own wallet)
+   */
+  async transferTokens({
+    token,
+    recipients,
+    sourceWallet = null
+  }: {
+    token: string
+    recipients: TransferRecipientInput[]
+    sourceWallet?: Wallet | null
+  }): Promise<Response | null> {
+    // Per-recipient amount: stackable -> unit count; fungible -> explicit amount (never both)
+    const amounts: number[] = recipients.map(recipient => {
+      const unitCount = recipient.units ? recipient.units.length : 0
+      if (unitCount > 0) {
+        if (recipient.amount !== null && recipient.amount !== undefined && recipient.amount > 0) {
+          throw new StackableUnitAmountException()
+        }
+        return unitCount
+      }
+      return recipient.amount ?? 0
+    })
+
+    const total = amounts.reduce((sum, amount) => sum + amount, 0)
+
+    // Resolve the source (queryBalance now carries tokenUnits, so the split below sees real units)
+    if (sourceWallet === null) {
+      sourceWallet = await this.querySourceWallet({
+        token,
+        amount: total
+      })
+    }
+
+    if (sourceWallet === null || Decimal.cmp(Number(sourceWallet.balance), total) < 0) {
+      throw new TransferBalanceException()
+    }
+
+    // Build a shadow recipient wallet per destination + assign a distinct batch id
+    const recipientWallets: Wallet[] = recipients.map(recipient => {
+      const recipientWallet = Wallet.create({
+        bundle: recipient.bundleHash,
+        token
+      })
+      if (recipient.batchId !== null && recipient.batchId !== undefined) {
+        recipientWallet.batchId = recipient.batchId
+      } else {
+        recipientWallet.initBatchId({ sourceWallet: sourceWallet as Wallet })
+      }
+      return recipientWallet
+    })
+
+    // Canonical remainder (carries the source's token/characters; reuses the source batch id)
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+
+    // Stackable (NFT): partition the source's tokenUnits across source (SENT union), each
+    // recipient (its subset), and remainder (KEPT) BEFORE the molecule is built. No-op for fungible.
+    if (recipients.some(recipient => recipient.units && recipient.units.length > 0)) {
+      sourceWallet.splitUnitsMulti(
+        recipients.map(recipient => recipient.units ?? []),
+        recipientWallets,
+        remainderWallet
+      )
+    }
+
+    const molecule = await this.createMolecule({
+      sourceWallet,
+      remainderWallet
+    })
+
+    const query = await this.createMoleculeMutation({
+      mutationClass: MutationTransferTokens,
+      molecule
+    })
+
+    query.fillMoleculeMulti({
+      recipientWallets,
+      amounts
     })
 
     return await this.executeQuery(query)
@@ -1620,7 +1713,7 @@ export default class KnishIOClient {
     amount = null,
     meta = null,
     batchId = null,
-    units: _units = null
+    units = null
   }: {
     token: TokenSlug | string
     amount?: number | string | null
@@ -1629,6 +1722,33 @@ export default class KnishIOClient {
     units?: string[] | null
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createToken() - Creating token ${token}...`)
+
+    const tokenMeta: Record<string, any> = meta || {}
+    const fungibility = tokenMeta.fungibility
+    let resolvedAmount: number | string = amount ?? 0
+
+    // For a stackable token, ensure a batch ID is present (mirror JS createToken)
+    if (fungibility === 'stackable') {
+      tokenMeta.batchId = batchId || generateBatchId({})
+    }
+
+    // Token-unit initialization for stackable / nonfungible tokens: the unit IDs ARE the supply.
+    // Meta values are sent as strings (the validator's MetaItemInput.value is a GraphQL String).
+    if (
+      (fungibility === 'stackable' || fungibility === 'nonfungible' || fungibility === 'non-fungible') &&
+      units && units.length > 0
+    ) {
+      if (Number(tokenMeta.decimals ?? 0) > 0) {
+        throw new StackableUnitDecimalsException()
+      }
+      if (Number(amount ?? 0) > 0) {
+        throw new StackableUnitAmountException()
+      }
+      resolvedAmount = units.length
+      tokenMeta.splittable = '1'
+      tokenMeta.decimals = '0'
+      tokenMeta.tokenUnits = JSON.stringify(units)
+    }
 
     // Create the molecule mutation
     const mutation = await this.createMoleculeMutation({ mutationClass: MutationCreateToken })
@@ -1644,8 +1764,8 @@ export default class KnishIOClient {
     // Initialize the create token mutation
     await mutation.fillMolecule({
       recipientWallet,
-      amount: amount ?? 0,
-      meta
+      amount: resolvedAmount,
+      meta: tokenMeta
     })
 
     // Execute the mutation

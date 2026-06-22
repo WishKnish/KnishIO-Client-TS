@@ -71,9 +71,11 @@ export default class MutationClaimShadowWallet extends MutationProposeMolecule {
       bundle: this.$__molecule.bundle,
       token,
       batchId
-    })
+    });
 
     // Initialize shadow wallet claim on the molecule
+    // (leading-paren statements REQUIRE the preceding semicolon — without it ASI parses
+    //  `Wallet.create({...})(this.$__molecule)` and throws "Wallet.create(...) is not a function")
     (this.$__molecule as any).initShadowWalletClaim(wallet)
     this.$__molecule.sign({})
     this.$__molecule.check()

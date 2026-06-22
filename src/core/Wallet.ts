@@ -350,6 +350,42 @@ export default class Wallet {
   }
 
   /**
+   * Split token units across MULTIPLE recipients (N-way sibling of splitUnits).
+   *
+   * The source retains the SENT union (all units leaving), each recipient gets its own
+   * subset, and the remainder keeps the KEPT units (those not assigned to any recipient).
+   * recipientUnitLists is parallel to recipientWallets. No-op when no units are sent.
+   *
+   * @param recipientUnitLists - per-recipient arrays of token unit IDs (parallel to recipientWallets)
+   * @param recipientWallets - destination wallets
+   * @param remainderWallet - wallet to receive the KEPT units
+   */
+  splitUnitsMulti(
+    recipientUnitLists: string[][],
+    recipientWallets: Wallet[],
+    remainderWallet: Wallet
+  ): void {
+    const sentIds = new Set<string>(recipientUnitLists.flat())
+
+    // Nothing to split (fungible transfer) — leave token units untouched
+    if (sentIds.size === 0) {
+      return
+    }
+
+    // Each recipient gets its own subset of the source's token units
+    recipientWallets.forEach((recipientWallet, i) => {
+      const ids = recipientUnitLists[i] ?? []
+      recipientWallet.tokenUnits = this.tokenUnits.filter(tokenUnit => ids.includes(tokenUnit.id))
+    })
+
+    // The remainder keeps everything not sent to any recipient (KEPT)
+    remainderWallet.tokenUnits = this.tokenUnits.filter(tokenUnit => !sentIds.has(tokenUnit.id))
+
+    // The source carries the SENT union (the ownership authority the validator reads)
+    this.tokenUnits = this.tokenUnits.filter(tokenUnit => sentIds.has(tokenUnit.id))
+  }
+
+  /**
    * Get token units data
    * Stub for compatibility
    */

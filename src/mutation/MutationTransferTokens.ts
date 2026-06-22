@@ -75,6 +75,24 @@ export default class MutationTransferTokens extends MutationProposeMolecule {
   }
 
   /**
+   * Fills the Molecule for a MULTI-recipient transfer (one source funds N recipients)
+   */
+  fillMoleculeMulti({
+    recipientWallets,
+    amounts
+  }: {
+    recipientWallets: Wallet[]
+    amounts: number[]
+  }): void {
+    (this.$__molecule as any).initValues({
+      recipientWallets,
+      amounts
+    });
+    (this.$__molecule as any).sign({});
+    (this.$__molecule as any).check((this.$__molecule as any).sourceWallet)
+  }
+
+  /**
    * Builds a Response object out of a JSON object
    * Matches JavaScript SDK createResponse method signature exactly
    */

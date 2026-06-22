@@ -48,6 +48,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import Response from './Response'
 import Wallet from '../core/Wallet'
+import TokenUnit from '../core/TokenUnit'
 import type Query from '../query/Query'
 
 /**
@@ -134,12 +135,14 @@ export default class ResponseBalance extends Response {
       wallet.tokenFungibility = data.token.fungibility
     }
 
-    // TODO: Implement TokenUnit support when TokenUnit class is available
-    // if (data.tokenUnits && data.tokenUnits.length) {
-    //   for (const tokenUnitData of data.tokenUnits) {
-    //     wallet.tokenUnits.push(TokenUnit.createFromGraphQL(tokenUnitData))
-    //   }
-    // }
+    // Stackable (NFT) token units — the validator serves Wallet.tokenUnits and QueryBalance
+    // selects them; parse them so a queried source wallet carries its units (otherwise every
+    // stackable transfer silently degrades to fungible). Mirrors ResponseWalletList.toClientWallet.
+    if (data.tokenUnits && data.tokenUnits.length) {
+      for (const tokenUnitData of data.tokenUnits) {
+        wallet.tokenUnits.push(TokenUnit.createFromGraphQL(tokenUnitData))
+      }
+    }
 
     // Set trade rates if available
     if (data.tradeRates && data.tradeRates.length) {

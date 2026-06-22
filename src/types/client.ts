@@ -129,6 +129,18 @@ export interface TransferTokenOptions {
   callbackUrl?: string | null
 }
 
+/**
+ * One destination of a multi-recipient transfer (see KnishIOClient.transferTokens).
+ * Provide EITHER units (stackable/NFT: amount = units.length) OR amount (fungible), not both.
+ * batchId makes the recipient a claimable shadow under that batch.
+ */
+export interface TransferRecipientInput {
+  bundleHash: BundleHash | string
+  units?: string[]
+  amount?: number | null
+  batchId?: string | null
+}
+
 export interface RequestTokensOptions {
   to: WalletAddress | string
   amount: number | string

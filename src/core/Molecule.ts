@@ -320,6 +320,59 @@ export default class Molecule {
   }
 
   /**
+   * Initialize a MULTI-recipient V-type molecule: one source debits its FULL balance to fund
+   * N recipients (each its own amount + stackable units) plus a remainder back to the sender.
+   * Multi-recipient sibling of initValue (WP line 544: fund multiple recipients with one
+   * transaction). recipientWallets is parallel to amounts.
+   */
+  initValues({
+    recipientWallets,
+    amounts
+  }: {
+    recipientWallets: Wallet[]
+    amounts: number[]
+  }): Molecule {
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for value transfer')
+    }
+
+    const total = amounts.reduce((sum, amount) => sum + amount, 0)
+
+    if (Number(this.sourceWallet.balance) - total < 0) {
+      throw new BalanceInsufficientException()
+    }
+
+    // Source atom: debit the ENTIRE balance (UTXO drain); carries the SENT union of token units
+    this.addAtom(Atom.create({
+      isotope: 'V',
+      wallet: this.sourceWallet,
+      value: -Number(this.sourceWallet.balance)
+    }))
+
+    // One atom per recipient: +amount_i, walletBundle -> recipient bundle, its own SENT units
+    recipientWallets.forEach((recipientWallet, i) => {
+      this.addAtom(Atom.create({
+        isotope: 'V',
+        wallet: recipientWallet,
+        value: amounts[i]!,
+        metaType: 'walletBundle',
+        metaId: recipientWallet.bundle!
+      }))
+    })
+
+    // Remainder atom: +(balance - total), walletBundle -> sender bundle, KEPT units
+    this.addAtom(Atom.create({
+      isotope: 'V',
+      wallet: this.remainderWallet!,
+      value: Number(this.sourceWallet.balance) - total,
+      metaType: 'walletBundle',
+      metaId: this.remainderWallet!.bundle!
+    }))
+
+    return this
+  }
+
+  /**
    * Sign the molecule with one-time signature
    * Matches JavaScript SDK sign method
    */
