@@ -49,17 +49,19 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import type Atom from '@/core/Atom'
 
 // Define structured value types for better type safety
-type StructuredValue = 
-  | string 
-  | number 
-  | boolean 
-  | null 
+type StructuredValue =
+  | string
+  | number
+  | boolean
+  | null
   | undefined
   | StructuredObject
   | StructuredArray
 
-type StructuredObject = Record<string, StructuredValue>
-type StructuredArray = StructuredValue[]
+// interfaces (not type aliases) so the recursion goes alias->interface->alias, which TS permits
+// (an all-type-alias cycle triggers TS2456 "circularly references itself").
+interface StructuredObject { [key: string]: StructuredValue }
+interface StructuredArray extends Array<StructuredValue> {}
 
 // Define types for hashable values
 type HashableValue = 
@@ -95,7 +97,7 @@ export default class HashAtom {
     // Extract atom properties with type safety
     for (const key of Object.keys(atom)) {
       if (Object.prototype.hasOwnProperty.call(atom, key)) {
-        parameters[key] = (atom as Record<string, unknown>)[key]
+        parameters[key] = (atom as unknown as Record<string, unknown>)[key]
       }
     }
 
@@ -113,7 +115,7 @@ export default class HashAtom {
 
     if (isArray(object)) {
       const result: StructuredArray = []
-      for (const value of object) {
+      for (const value of (object as unknown[])) {
         result.push(HashAtom.isStructure(value) ? HashAtom.structure(value) : value as StructuredValue)
       }
       return result

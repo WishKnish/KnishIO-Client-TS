@@ -49,7 +49,6 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import type { GraphQLClient as IGraphQLClient } from '@/types'
 import { CodeException } from '@/exception'
 import type { DocumentNode } from 'graphql'
-import { GraphQLRequestSchema, parseWithSchema } from '@/schemas'
 
 // Define subscription-specific types for better type safety
 interface SubscriptionRequest {
@@ -72,7 +71,9 @@ interface SubscriptionCreateParams {
 }
 
 // Type for GraphQL client with subscription support
-interface GraphQLSubscriptionClient extends IGraphQLClient {
+// Omit the base's required subscribe/getUri, then re-add as OPTIONAL variants (a passed client may
+// not implement them) — avoids TS2430 (an optional member can't override a required base member).
+interface GraphQLSubscriptionClient extends Omit<IGraphQLClient, 'subscribe' | 'getUri'> {
   subscribe?: (request: SubscriptionRequest, closure: (result: unknown) => void) => Promise<string>
   getUri?: () => string | null
 }

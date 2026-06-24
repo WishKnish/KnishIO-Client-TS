@@ -54,11 +54,10 @@ import {
   Client,
   OperationResult
 } from '@urql/core'
-import { createClient as createWSClient, Client as WSClient } from 'graphql-ws'
-import { pipe, map, SubscriptionLike } from 'wonka'
+import { createClient as createWSClient, Client as WSClient, type SubscribePayload } from 'graphql-ws'
+import { pipe, map, subscribe, type Subscription } from 'wonka'
 import type { DocumentNode } from 'graphql'
 import type Wallet from '@/core/Wallet'
-import { GraphQLRequestSchema, GraphQLResponseSchema, parseWithSchema } from '@/schemas'
 
 // Enhanced type definitions with proper constraints
 interface SocketConfig {
@@ -110,7 +109,7 @@ class UrqlClientWrapper {
   private $__authToken: string = ''
   private $__pubkey: string | null = null
   private $__wallet: Wallet | null = null
-  private readonly serverUri: string
+  private serverUri: string
   private soketi: SocketConfig | null
   private cipherLink: boolean
   private readonly $__subscriptionManager: Map<string, SubscriptionManager> = new Map()
@@ -126,8 +125,7 @@ class UrqlClientWrapper {
 
   private createUrqlClient({
     serverUri,
-    socket,
-    encrypt
+    socket
   }: {
     serverUri: string
     socket?: SocketConfig | null
@@ -147,7 +145,7 @@ class UrqlClientWrapper {
       exchanges.push(subscriptionExchange({
         forwardSubscription: operation => ({
           subscribe: sink => {
-            const disposable = wsClient.subscribe(operation, sink)
+            const disposable = wsClient.subscribe(operation as unknown as SubscribePayload, sink)
             return { unsubscribe: disposable }
           }
         })
@@ -209,12 +207,14 @@ class UrqlClientWrapper {
       throw new Error('Query is required for subscription')
     }
 
-    const subscription: SubscriptionLike = pipe(
+    // wonka v6: subscribe is a pipe operator (no `.subscribe()` method on Source) → pipe(src, ..., subscribe(h))
+    const subscription: Subscription = pipe(
       this.$__client.subscription(query, variables),
       map(result => {
         closure(this.formatResponse<TData>(result))
-      })
-    ).subscribe(() => {})
+      }),
+      subscribe(() => {})
+    )
 
     // Store subscription for later cleanup
     if (operationName) {
@@ -238,8 +238,8 @@ class UrqlClientWrapper {
     if (result.error) {
       response.errors = [{
         message: result.error.message,
-        locations: result.error.graphQLErrors?.[0]?.locations,
-        path: result.error.graphQLErrors?.[0]?.path,
+        locations: result.error.graphQLErrors?.[0]?.locations as { line: number; column: number }[] | undefined,
+        path: result.error.graphQLErrors?.[0]?.path as (string | number)[] | undefined,
         extensions: result.error.graphQLErrors?.[0]?.extensions
       }]
     }
@@ -263,7 +263,7 @@ class UrqlClientWrapper {
   }
 
   unsubscribeAll(): void {
-    this.$__subscriptionManager.forEach((subscription, operationName) => {
+    this.$__subscriptionManager.forEach((_subscription, operationName) => {
       this.unsubscribe(operationName)
     })
   }

@@ -58,19 +58,14 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import type {
   AtomIsotope,
-  KnishIOErrorType,
-  QueryType,
-  MutationType,
-  SubscriptionType
+  KnishIOErrorType
 } from '../constants'
 
 import type {
   WalletAddress,
   BundleHash,
   TokenSlug,
-  Position,
   MolecularHash,
-  CellSlug,
   BatchId,
   AtomParams,
   WalletParams,

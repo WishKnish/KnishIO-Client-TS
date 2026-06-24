@@ -239,7 +239,7 @@ export function isKnishIOErrorType(value: unknown): value is KnishIOErrorType {
     'WRONG_TOKEN_TYPE_ERROR'
   ] as const
 
-  return typeof value === 'string' && errorTypes.includes(value as KnishIOErrorType)
+  return typeof value === 'string' && (errorTypes as readonly string[]).includes(value)
 }
 
 /**

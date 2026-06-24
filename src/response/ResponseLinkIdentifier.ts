@@ -74,7 +74,7 @@ export default class ResponseLinkIdentifier extends Response {
   /**
    * Returns success status
    */
-  success(): any {
+  override success(): any {
     return Dot.get(this.data(), 'set')
   }
 

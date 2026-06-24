@@ -72,7 +72,8 @@ export default class Hex {
         ? ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']
         : ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
-      return set[Math.floor(val / 16)] + set[val % 16]
+      // indices are provably in-range (val is a byte; /16 and %16 are 0..15 for a 16-elem set)
+      return set[Math.floor(val / 16)]! + set[val % 16]!
     }
 
     const opts: Required<HexOptions> = Object.assign(
@@ -97,7 +98,7 @@ export default class Hex {
     let column = 0
 
     for (let i = 0; i < arrayLike.length; ++i) {
-      str += numberToHex(arrayLike[i], opts.uppercase)
+      str += numberToHex(arrayLike[i]!, opts.uppercase)
 
       if (i === arrayLike.length - 1) {
         break
@@ -135,7 +136,7 @@ export default class Hex {
     let curr = -1
 
     for (let i = 0; i < target.length; ++i) {
-      const c = target[i]
+      const c = target[i]!
       const val = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'].indexOf(c)
 
       if (val === -1) {

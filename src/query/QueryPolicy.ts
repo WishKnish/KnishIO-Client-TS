@@ -51,7 +51,6 @@ import ResponsePolicy from '@/response/ResponsePolicy'
 import { gql } from '@urql/core'
 import type { GraphQLClient as IGraphQLClient } from '@/types'
 import type KnishIOClient from '@/KnishIOClient'
-import type { MetaType, MetaId } from '@/types'
 
 /**
  * Query for retrieving Policy information

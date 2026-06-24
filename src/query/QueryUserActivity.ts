@@ -51,7 +51,6 @@ import ResponseQueryUserActivity from '@/response/ResponseQueryUserActivity'
 import { gql } from '@urql/core'
 import type { GraphQLClient as IGraphQLClient } from '@/types'
 import type KnishIOClient from '@/KnishIOClient'
-import type { BundleHash, MetaType, MetaId } from '@/types'
 
 /**
  * Query for retrieving information about user activity

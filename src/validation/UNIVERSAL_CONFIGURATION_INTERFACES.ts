@@ -61,8 +61,6 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
  * - Performance optimization hints
  */
 
-import { z } from 'zod'
-import type { ValidationResult } from './ValidationService'
 
 // =============================================================================
 // UNIVERSAL CONFIGURATION TYPES
@@ -227,16 +225,16 @@ export class ConfigValidator {
 
       // Enhanced validations
       if (options.includeWarnings !== false) {
-        result.warnings.push(...this.generateWarnings(result.data))
+        result.warnings.push(...this.generateWarnings(result.data!))
       }
 
       if (options.includeRecommendations !== false) {
-        result.recommendations.push(...this.generateRecommendations(result.data, options))
+        result.recommendations.push(...this.generateRecommendations(result.data!, options))
       }
 
       // Performance validation
       if (options.includePerformanceHints !== false) {
-        result.warnings.push(...this.generatePerformanceWarnings(result.data))
+        result.warnings.push(...this.generatePerformanceWarnings(result.data!))
       }
 
     } catch (error) {

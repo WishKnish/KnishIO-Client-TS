@@ -72,7 +72,7 @@ export default class Decimal {
    * @param debug Enable debug logging
    * @returns 0 if equal, 1 if value1 > value2, -1 if value1 < value2
    */
-  static cmp(value1: number, value2: number, debug: boolean = false): number {
+  static cmp(value1: number, value2: number, _debug: boolean = false): number {
     const val1 = Decimal.val(value1) * MULTIPLIER
     const val2 = Decimal.val(value2) * MULTIPLIER
 

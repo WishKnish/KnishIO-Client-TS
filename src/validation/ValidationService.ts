@@ -57,20 +57,9 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
  */
 
 import { z } from 'zod'
-import type { 
-  KnishIOClientConfig,
-  TransferParams,
-  CreateTokenParams,
-  RequestTokensParams,
-  BalanceQueryParams,
-  MetaQueryParams,
-  WalletQueryParams
-} from '@/types'
 import {
   Schemas,
   safeParse,
-  validateStrict,
-  validateWithDefaults,
   createTypeGuard,
   type ValidatedClientConfig,
   type ValidatedTransferParams,
@@ -164,8 +153,8 @@ export class ValidationService {
       this.logValidation('ClientConfig', true)
       return {
         success: true,
-        data: parseResult.data,
-        warnings: this.generateConfigWarnings(parseResult.data)
+        data: parseResult.data as ValidatedClientConfig,
+        warnings: this.generateConfigWarnings(parseResult.data as ValidatedClientConfig)
       }
     } catch (error) {
       this.logValidation('ClientConfig', false, String(error))
@@ -193,7 +182,9 @@ export class ValidationService {
         KNISHIO_SERVER_SDK_VERSION: process.env.KNISHIO_SERVER_SDK_VERSION
       }
 
-      const parseResult = safeParse(Schemas.EnvironmentConfig, env)
+      // cast: EnvironmentConfig uses .default()/.optional() so its inferred input≠output type and
+      // doesn't structurally match safeParse's ZodType<T> param; ZodTypeAny sidesteps the mismatch.
+      const parseResult = safeParse(Schemas.EnvironmentConfig as z.ZodTypeAny, env)
       
       if (!parseResult.success) {
         return {
@@ -320,7 +311,7 @@ export class ValidationService {
               received: 'error',
               path: [],
               message: err.message
-            } as z.ZodIssue)),
+            } as unknown as z.ZodIssue)),
             context: 'GraphQLResponse'
           }
         }

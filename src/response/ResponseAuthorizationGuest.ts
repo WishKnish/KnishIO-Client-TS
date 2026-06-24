@@ -75,14 +75,14 @@ export default class ResponseAuthorizationGuest extends Response {
   /**
    * Returns the reason for rejection
    */
-  reason(): string {
+  override reason(): string {
     return 'Invalid response from server'
   }
 
   /**
    * Returns whether molecule was accepted or not
    */
-  success(): boolean {
+  override success(): boolean {
     return this.payload() !== null
   }
 
