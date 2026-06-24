@@ -281,16 +281,6 @@ export interface ActiveSessionOptions {
   metaId?: MetaId | string | null
 }
 
-export interface UserActivityOptions {
-  bundleHash?: BundleHash | string | null
-  metaType?: MetaType | string | null
-  metaId?: MetaId | string | null
-  dateFrom?: string | null
-  dateTo?: string | null
-  limit?: number | null
-  offset?: number | null
-}
-
 export interface PolicyQueryOptions {
   metaType?: MetaType | string | null
   metaId?: MetaId | string | null
@@ -488,15 +478,6 @@ export interface ResponseQueryActiveSession extends BaseResponse<{
   status: string
   createdAt: string
   expiresAt: string
-}> {}
-
-export interface ResponseQueryUserActivity extends BaseResponse<{
-  activities: Array<{
-    type: string
-    description: string
-    data: Record<string, unknown>
-    createdAt: string
-  }>
 }> {}
 
 export interface ResponsePolicy extends BaseResponse<{

@@ -81,7 +81,6 @@ import QueryBatchHistory from '@/query/QueryBatchHistory'
 import QueryAtom from '@/query/QueryAtom'
 import QueryPolicy from '@/query/QueryPolicy'
 import QueryActiveSession from '@/query/QueryActiveSession'
-import QueryUserActivity from '@/query/QueryUserActivity'
 import QueryToken from '@/query/QueryToken'
 import QueryMetaTypeViaAtom from '@/query/QueryMetaTypeViaAtom'
 import QueryMetaTypeViaMolecule from '@/query/QueryMetaTypeViaMolecule'
@@ -1527,51 +1526,6 @@ export default class KnishIOClient {
       metaType,
       metaId
     }) as Promise<Response>
-  }
-
-  /**
-   * Query user activity
-   */
-  async queryUserActivity({
-    bundleHash,
-    metaType,
-    metaId,
-    ipAddress = null,
-    browser = null,
-    osCpu = null,
-    resolution = null,
-    timeZone = null,
-    countBy = null,
-    interval = null
-  }: {
-    bundleHash: BundleHash | string
-    metaType: MetaType | string
-    metaId: MetaId | string
-    ipAddress?: string | null
-    browser?: string | null
-    osCpu?: string | null
-    resolution?: string | null
-    timeZone?: string | null
-    countBy?: string | null
-    interval?: string | null
-  }): Promise<Response> {
-    const query = this.createQuery(QueryUserActivity)
-
-    const variables: Record<string, any> = {
-      bundleHash,
-      metaType,
-      metaId
-    }
-
-    if (ipAddress !== null) variables.ipAddress = ipAddress
-    if (browser !== null) variables.browser = browser
-    if (osCpu !== null) variables.osCpu = osCpu
-    if (resolution !== null) variables.resolution = resolution
-    if (timeZone !== null) variables.timeZone = timeZone
-    if (countBy !== null) variables.countBy = countBy
-    if (interval !== null) variables.interval = interval
-
-    return this.executeQuery(query, variables) as Promise<Response>
   }
 
   /**

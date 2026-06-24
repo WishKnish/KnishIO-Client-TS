@@ -282,8 +282,7 @@ export function isQueryType(value: unknown): value is QueryType {
     'Batch',
     'ActiveSession',
     'Policy',
-    'Token',
-    'UserActivity'
+    'Token'
   ] as const
 
   return typeof value === 'string' && queryTypes.includes(value as QueryType)
