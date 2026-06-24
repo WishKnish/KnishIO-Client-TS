@@ -1,0 +1,35 @@
+# TS SDK CI — enforces the ESLint gate (cycle 109) + the typecheck gate (cycle 110) + the vitest suite.
+# Born-enforced: the repo had no CI, so both gates were local-only/bypassable until now.
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  gate:
+    name: lint + typecheck + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # package-lock.json and yarn.lock coexist (yarn-managed, node-modules linker);
+      # npm install is tolerant of lockfile drift, where npm ci would hard-fail.
+      - name: Install dependencies
+        run: npm install
+
+      # The c109 lint gate (eslint.config.js, ESLint 9 flat config): 0 errors. No --fix
+      # in CI (the local `npm run lint` auto-fixes; CI is a pure check).
+      - name: ESLint (lint gate)
+        run: npx eslint src
+
+      # The c110 typecheck gate (tsc --noEmit): 0 errors.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # vitest unit suites. `run` (one-shot) — the package's `test` script is watch-mode.
+      - name: Vitest
+        run: npx vitest run
