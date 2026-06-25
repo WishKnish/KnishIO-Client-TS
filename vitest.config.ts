@@ -10,6 +10,13 @@ const canonicalVectorsPresent = existsSync(
   resolve(__dirname, '../shared-test-results/canonical-patent-vectors.json'),
 );
 
+// Cycle 135: cross-platform-canonical.test.ts statically imports the shared
+// cross-platform-test-vectors.json from the monorepo parent — same standalone-CI
+// gate as above (run in the monorepo, skip in a standalone checkout).
+const crossPlatformVectorsPresent = existsSync(
+  resolve(__dirname, '../shared-test-results/cross-platform-test-vectors.json'),
+);
+
 export default defineConfig({
   test: {
     globals: true,
@@ -18,6 +25,7 @@ export default defineConfig({
     exclude: [
       ...configDefaults.exclude,
       ...(canonicalVectorsPresent ? [] : ['**/generate-secret-parity.test.ts']),
+      ...(crossPlatformVectorsPresent ? [] : ['**/cross-platform-canonical.test.ts']),
     ],
   },
   resolve: {
