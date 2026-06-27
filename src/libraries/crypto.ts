@@ -178,10 +178,10 @@ export function generateSecretEnhanced(options: SecretGenerationOptions): string
  * Uses SHAKE256 with 256-bit output (64 hex characters)
  */
 export function generateBundleHash(secret: string, _source: string | null = null): BundleHash {
-  if (!secret || secret.length === 0) {
-    throw new Error('Secret is required for bundle hash generation')
-  }
-
+  // Cross-SDK parity (c142): an empty secret hashes to shake256("") = 46b9dd2b… — matching
+  // JS/PHP/Kotlin/Rust/Python + the committed `empty_secret` vector. (Previously threw;
+  // no real caller passes an empty secret.)
+  //
   // CRITICAL: source parameter must be IGNORED to match JS SDK behavior.
   // JS SDK's generateBundleHash() accepts source but never uses it.
   // The bundle hash is an identity anchor and must be deterministic from secret alone.

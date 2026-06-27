@@ -36,12 +36,11 @@ describe('Canonical Cross-Platform SHAKE256 Vectors', () => {
 })
 
 describe('Canonical Cross-Platform Bundle Hash Vectors', () => {
-  // DIVERGENCE (flagged cycle 135): TS generateBundleHash() throws "Secret is required"
-  // on an empty secret, but JS/PHP/Kotlin/Rust + the committed vector return
-  // shake256("") = 46b9dd2b… for `empty_secret`. TS is the lone outlier (its guard is
-  // arguably the correct/defensive behavior). Out of scope for the ML-KEM arc — assert
-  // only the non-empty cases here; the empty-secret divergence is a separate follow-up.
-  it.each(vectors.bundle_hash.tests.filter((t) => t.secret.length > 0))('Bundle hash: $name', (vector) => {
+  // FIXED (cycle 142): TS generateBundleHash() now hashes an empty secret to
+  // shake256("") = 46b9dd2b… (removed the "Secret is required" guard), matching
+  // JS/PHP/Kotlin/Rust/Python + the committed `empty_secret` vector — so ALL cases
+  // (incl. empty_secret) are asserted here, no longer filtered.
+  it.each(vectors.bundle_hash.tests)('Bundle hash: $name', (vector) => {
     expect(generateBundleHash(vector.secret)).toBe(vector.expected)
   })
 })
