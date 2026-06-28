@@ -24,7 +24,7 @@ export default defineConfig({
     testTimeout: 60000,
     exclude: [
       ...configDefaults.exclude,
-      ...(canonicalVectorsPresent ? [] : ['**/generate-secret-parity.test.ts']),
+      ...(canonicalVectorsPresent ? [] : ['**/generate-secret-parity.test.ts', '**/buffer-conservation.test.ts']),
       ...(crossPlatformVectorsPresent ? [] : ['**/cross-platform-canonical.test.ts']),
     ],
   },
