@@ -446,6 +446,16 @@ export default class Wallet {
   }
 
   async decryptMessage(encryptedData: { cipherText: string; encryptedMessage: string }): Promise<any> {
+    const decryptedString = await this._mlkemDecryptToString(encryptedData)
+    return decryptedString === null ? null : JSON.parse(decryptedString)
+  }
+
+  /**
+   * ML-KEM768 decapsulate + AES-256-GCM decrypt → the RAW decrypted UTF-8 string (no JSON.parse).
+   * Shared by {@link decryptMessage} (which JSON.parses the result) and the PQ CipherHash transport
+   * ({@link decryptMyMessageML768}, which needs the raw response JSON text). PQ-transport Phase E.
+   */
+  async _mlkemDecryptToString(encryptedData: { cipherText: string; encryptedMessage: string }): Promise<string | null> {
     const { cipherText, encryptedMessage } = encryptedData
     let sharedSecret
     try {
@@ -474,9 +484,8 @@ export default class Wallet {
       console.info('Wallet::decryptMessage() - deserialized encrypted message', deserializedEncryptedMessage)
       return null
     }
-    let decryptedString
     try {
-      decryptedString = new TextDecoder().decode(decryptedUint8)
+      return new TextDecoder().decode(decryptedUint8)
     } catch (e) {
       console.warn('Wallet::decryptMessage() - Decoding failed', e)
       console.info('Wallet::decryptMessage() - my public key', this.pubkey)
@@ -485,7 +494,43 @@ export default class Wallet {
       console.info('Wallet::decryptMessage() - decrypted Uint8Array', decryptedUint8)
       return null
     }
-    return JSON.parse(decryptedString)
+  }
+
+  /**
+   * Canonical cross-SDK hashShare for a public key: standard base64 of SHAKE256(pubkey_utf8, 8 bytes)
+   * — byte-matches the validator's hash_share and the JS/Kotlin/PHP hashShare. `shake256(pubkey, 64)`
+   * = 64 bits = 8 bytes (hex) → hex-decode → standard base64 via serializeKey. PQ-transport Phase E.
+   */
+  hashShare(pubkey: string): string {
+    const hex = shake256(pubkey, 64)
+    const bytes = new Uint8Array(hex.length / 2)
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.substr(i * 2, 2), 16)
+    }
+    return this.serializeKey(bytes)
+  }
+
+  /**
+   * Post-quantum (ML-KEM768) CipherHash request envelope: a stringified single-recipient map
+   * `{ "<hashShare(recipientPubkey)>": {cipherText, encryptedMessage} }` (object-valued, via
+   * {@link encryptMessage}). Matches the Rust validator's CipherHash handler. PQ-transport Phase E.
+   */
+  async encryptStringML768(message: any, recipientPubkey: string): Promise<string> {
+    const envelope = await this.encryptMessage(message, recipientPubkey)
+    return JSON.stringify({ [this.hashShare(recipientPubkey)]: envelope })
+  }
+
+  /**
+   * Decrypt a CipherHash response map addressed to THIS wallet's ML-KEM pubkey
+   * (`hashShare(this.pubkey)`) → the RAW decrypted GraphQL response JSON text (NOT JSON.parsed;
+   * it replaces the HTTP response body for the normal parser). `null` if no entry / decrypt fails.
+   */
+  async decryptMyMessageML768(map: Record<string, { cipherText: string; encryptedMessage: string }>): Promise<string | null> {
+    const envelope = map[this.hashShare(this.pubkey)]
+    if (!envelope) {
+      return null
+    }
+    return this._mlkemDecryptToString(envelope)
   }
 
   // =============================================================================

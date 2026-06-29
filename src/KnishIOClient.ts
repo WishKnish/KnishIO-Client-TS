@@ -2407,9 +2407,17 @@ export default class KnishIOClient {
       molecule
     })
 
-    // Initialize the profile auth mutation
+    // Initialize the profile auth mutation.
+    // PQ-transport Phase E: convey the AUTH source wallet's ML-KEM768 public key as a SIGNED
+    // walletPubkey U-atom meta, so the validator can encrypt CipherHash responses back to THIS
+    // wallet (the one that decrypts them). Signed → MITM can't swap the target. Conveyed
+    // unconditionally (parity with JS/Kotlin/PHP), so even a plaintext auth primes enc_pubkey.
+    const authMeta: Record<string, string> = { encrypt: encrypt ? 'true' : 'false' }
+    if (wallet.pubkey) {
+      authMeta.walletPubkey = wallet.pubkey
+    }
     mutation.fillMolecule({
-      meta: { encrypt: encrypt ? 'true' : 'false' }
+      meta: authMeta
     })
 
     // Execute the mutation

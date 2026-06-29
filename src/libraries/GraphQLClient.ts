@@ -62,6 +62,22 @@ import type {
 } from '@/types'
 import type Wallet from '@/core/Wallet'
 
+const CIPHER_HASH_QUERY = 'query ( $Hash: String! ) { CipherHash ( Hash: $Hash ) { hash } }'
+
+/**
+ * Light parse of a GraphQL request body's operation type + root field name, for the CipherHash
+ * bypass decision (no full GraphQL parse needed). Operation type = the first query/mutation/
+ * subscription keyword (default 'query' for an anonymous `{ ... }`); root field = the first
+ * identifier inside the top-level selection set.
+ */
+function parseOperation(query: string): { type: string; name: string } {
+  const typeMatch = (query || '').match(/\b(query|mutation|subscription)\b/i)
+  const type = typeMatch?.[1]?.toLowerCase() ?? 'query'
+  const braceIdx = (query || '').indexOf('{')
+  const nameMatch = braceIdx >= 0 ? query.slice(braceIdx + 1).match(/[A-Za-z_][A-Za-z0-9_]*/) : null
+  return { type, name: nameMatch?.[0] ?? '' }
+}
+
 /**
  * GraphQL client wrapper for KnishIO SDK
  * Provides a unified interface for GraphQL operations
@@ -125,6 +141,10 @@ export default class GraphQLClient implements IGraphQLClient {
     return createClient({
       url: serverUri,
       exchanges,
+      // PQ-transport Phase E: when encryption is on, route fetch through the CipherHash wrapper
+      // (encrypt the request body to the validator's ML-KEM pubkey, decrypt the response).
+      // Omitted → urql uses the global fetch (plaintext).
+      ...(this.cipherLink ? { fetch: ((input: any, init: any) => this.cipherFetch(input, init)) as typeof fetch } : {}),
       fetchOptions: () => ({
         headers: {
           'X-Auth-Token': this.$__authToken
@@ -133,6 +153,69 @@ export default class GraphQLClient implements IGraphQLClient {
         signal: AbortSignal.timeout(60000)
       })
     })
+  }
+
+  /**
+   * Whether an outgoing GraphQL request body should be wrapped in CipherHash. Bypass (plaintext):
+   * introspection `__schema`, `ContinuId`, the `AccessToken` mutation, and the U-isotope
+   * `ProposeMolecule` (auth bootstrap — the key exchange itself can't be encrypted). Mirrors the
+   * Kotlin/PHP/validator bypass set.
+   */
+  private shouldEncrypt(body: string): boolean {
+    let parsed: any
+    try {
+      parsed = JSON.parse(body)
+    } catch (e) {
+      return false
+    }
+    const { type, name } = parseOperation(parsed.query)
+    if (type === 'query' && (name === '__schema' || name === 'ContinuId')) return false
+    if (type === 'mutation' && name === 'AccessToken') return false
+    if (type === 'mutation' && name === 'ProposeMolecule') {
+      const isotope = parsed.variables?.molecule?.atoms?.[0]?.isotope
+      if (isotope === 'U') return false
+    }
+    return true
+  }
+
+  /**
+   * Custom `fetch` that wraps a GraphQL request in the ML-KEM CipherHash envelope and decrypts the
+   * response (PQ-transport Phase E). Operates on the raw POST body (mirrors the JS/Kotlin transform).
+   * Reads the CURRENT client wallet + validator pubkey from auth.
+   */
+  private async cipherFetch(input: any, init: any): Promise<Response> {
+    const wallet = this.$__wallet
+    const serverPubkey = this.$__pubkey
+    let encryptedRequest = false
+    let requestInit = init
+
+    if (wallet && serverPubkey && init && typeof init.body === 'string' && this.shouldEncrypt(init.body)) {
+      const hashVar = await wallet.encryptStringML768(init.body, serverPubkey)
+      requestInit = { ...init, body: JSON.stringify({ query: CIPHER_HASH_QUERY, variables: { Hash: hashVar } }) }
+      encryptedRequest = true
+    }
+
+    const response = await fetch(input, requestInit)
+    if (!encryptedRequest) {
+      return response
+    }
+
+    // Decrypt the CipherHash response back to the inner GraphQL response JSON.
+    const text = await response.text()
+    const init2 = { status: response.status, statusText: response.statusText, headers: response.headers }
+    let parsed: any
+    try {
+      parsed = JSON.parse(text)
+    } catch (e) {
+      return new Response(text, init2)
+    }
+    const hash = parsed?.data?.CipherHash?.hash
+    if (typeof hash !== 'string') {
+      // Plaintext (e.g. a validator-side error response) — pass through unchanged.
+      return new Response(text, init2)
+    }
+    const decrypted = await wallet!.decryptMyMessageML768(JSON.parse(hash))
+    return new Response(decrypted != null ? decrypted : text, init2)
   }
 
   setAuthData({
