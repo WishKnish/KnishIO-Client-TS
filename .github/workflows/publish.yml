@@ -1,0 +1,51 @@
+# TS SDK publish — tag-driven npm publish (cycle 177).
+# Push a bare semver tag (TS uses no `v` prefix, e.g. `0.9.1`) → lint/typecheck/test/build gate → `npm publish`.
+# PREREQUISITE: add the repo secret `NPM_TOKEN` (an npmjs.com token with publish rights on
+# `@wishknish/knishio-client-ts`). Without it the publish step fails.
+name: Publish
+
+on:
+  push:
+    tags:
+      - '[0-9]*'
+
+jobs:
+  publish:
+    name: build, test, publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install
+
+      # Gate — never publish a tag that doesn't lint/typecheck/test/build clean.
+      - name: ESLint (lint gate)
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Vitest
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
