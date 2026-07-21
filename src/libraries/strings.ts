@@ -220,15 +220,20 @@ export function hexToBase64(hexString: string): string {
     
     // Convert hex to bytes
     const bytes = hexStringToBuffer(cleanHex)
-    
-    // Convert to base64
-    if (typeof btoa !== 'undefined') {
-      // Browser environment
-      return btoa(String.fromCharCode(...bytes))
-    } else {
-      // Node.js environment or manual conversion
+
+    // Buffer fast path (Node). Byte-identical to the btoa encoding below.
+    if (typeof Buffer !== 'undefined') {
       return Buffer.from(bytes).toString('base64')
     }
+    // Browser fallback: a single String.fromCharCode(...bytes) spread overflows the
+    // call stack once the payload exceeds the engine's argument limit (~64K), so
+    // convert in chunks.
+    let binary = ''
+    const CHUNK_SIZE = 0x8000
+    for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK_SIZE))
+    }
+    return btoa(binary)
   } catch (error) {
     throw new Error(`Failed to convert hex to base64: ${error instanceof Error ? error.message : String(error)}`)
   }
