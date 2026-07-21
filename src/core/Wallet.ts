@@ -608,11 +608,30 @@ export default class Wallet {
   }
 
   serializeKey(key: Uint8Array): string {
-    return btoa(String.fromCharCode(...key))
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(key).toString('base64')
+    }
+    // A single String.fromCharCode(...key) spread overflows the call stack once the
+    // payload exceeds the engine's argument limit (~64K), so convert in chunks.
+    let binary = ''
+    const CHUNK_SIZE = 0x8000
+    for (let i = 0; i < key.length; i += CHUNK_SIZE) {
+      binary += String.fromCharCode(...key.subarray(i, i + CHUNK_SIZE))
+    }
+    return btoa(binary)
   }
 
   deserializeKey(serializedKey: string): Uint8Array {
+    if (typeof Buffer !== 'undefined') {
+      return new Uint8Array(Buffer.from(serializedKey, 'base64'))
+    }
+    // Spreading the binary string ([...str]) allocates one single-char string per
+    // byte — prohibitive for multi-MB payloads. Index directly instead.
     const binaryString = atob(serializedKey)
-    return new Uint8Array([...binaryString].map(char => char.charCodeAt(0)))
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return bytes
   }
 }
