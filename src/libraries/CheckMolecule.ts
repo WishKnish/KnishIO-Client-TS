@@ -139,6 +139,10 @@ export default class CheckMolecule {
       this.isotopeU() &&
       this.isotopeI() &&
       this.isotopeR() &&
+      this.isotopeP() &&
+      this.isotopeA() &&
+      this.isotopeB() &&
+      this.isotopeF() &&
       this.isotopeV(senderWallet || null)
   }
 
@@ -370,6 +374,172 @@ export default class CheckMolecule {
   }
 
   /**
+   * Validate isotope P atoms (peering)
+   * @return True if valid
+   * @throws WrongTokenTypeException if the token slug is not USER
+   * @throws MetaMissingException if the required peerHost meta field is absent
+   */
+  isotopeP(): boolean {
+    for (const atom of this.molecule.getIsotopes('P')) {
+      if (atom.token !== 'USER') {
+        throw new WrongTokenTypeException(`Check::isotopeP() - "${atom.token}" is not a valid Token slug for "${atom.isotope}" isotope Atoms!`)
+      }
+
+      const metas = atom.aggregatedMeta()
+
+      if (!Object.prototype.hasOwnProperty.call(metas, 'peerHost') || !metas.peerHost) {
+        throw new MetaMissingException('Check::isotopeP() - Required meta field "peerHost" is missing!')
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Validate isotope A atoms (append request)
+   * @return True if valid
+   * @throws WrongTokenTypeException if the token slug is not USER
+   * @throws MetaMissingException if metaType, metaId or the action meta field is absent
+   */
+  isotopeA(): boolean {
+    for (const atom of this.molecule.getIsotopes('A')) {
+      if (atom.token !== 'USER') {
+        throw new WrongTokenTypeException(`Check::isotopeA() - "${atom.token}" is not a valid Token slug for "${atom.isotope}" isotope Atoms!`)
+      }
+
+      if (!atom.metaType) {
+        throw new MetaMissingException('Check::isotopeA() - Required field "metaType" is missing!')
+      }
+
+      if (!atom.metaId) {
+        throw new MetaMissingException('Check::isotopeA() - Required field "metaId" is missing!')
+      }
+
+      const metas = atom.aggregatedMeta()
+
+      if (!Object.prototype.hasOwnProperty.call(metas, 'action') || !metas.action) {
+        throw new MetaMissingException('Check::isotopeA() - Required meta field "action" is missing!')
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Validate isotope B atoms (buffer/exchange)
+   *
+   * Buffer molecules are cross-isotope: their V atoms do not balance on their own
+   * because a B atom absorbs the difference. isotopeV() therefore skips its V-only
+   * conservation checks whenever B (or F) atoms are present, and conservation is
+   * enforced here instead over the combined V+B set.
+   *
+   * @return True if valid
+   * @throws MetaMissingException if metaType is not walletBundle, or metaId is absent
+   * @throws TransferMalformedException if a B atom value is not a number
+   * @throws TransferUnbalancedException if V+B atom values do not sum to zero
+   */
+  isotopeB(): boolean {
+    const isotopeB = this.molecule.getIsotopes('B')
+
+    if (isotopeB.length === 0) {
+      return true
+    }
+
+    for (const atom of isotopeB) {
+      // B atoms must reference a wallet bundle
+      if (!atom.metaType || atom.metaType !== 'walletBundle') {
+        throw new MetaMissingException('Check::isotopeB() - B-isotope atoms must have metaType "walletBundle"!')
+      }
+
+      if (!atom.metaId) {
+        throw new MetaMissingException('Check::isotopeB() - B-isotope atoms must have a metaId!')
+      }
+
+      // Value must be parseable as a number
+      const value = atom.value !== null ? Number(atom.value) : Number.NaN
+      if (Number.isNaN(value)) {
+        throw new TransferMalformedException('Check::isotopeB() - B-isotope atom value is not a valid number!')
+      }
+    }
+
+    // V+B balance conservation: sum of all V and B atom values must equal zero
+    const vAtoms = this.molecule.getIsotopes('V')
+    if (vAtoms.length > 0) {
+      let sum = 0
+      for (const atom of [...vAtoms, ...isotopeB]) {
+        const value = atom.value !== null ? Number(atom.value) : Number.NaN
+        if (!Number.isNaN(value)) {
+          sum += value
+        }
+      }
+      if (sum !== 0) {
+        throw new TransferUnbalancedException('Check::isotopeB() - V+B atom values do not balance to zero!')
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Validate isotope F atoms (fusion/NFT)
+   *
+   * Mirrors isotopeB() and additionally forbids negative values. Must stay paired
+   * with the hasCrossIsotope gate in isotopeV(), which is keyed on B *or* F: without
+   * this check an F-isotope molecule would skip V-only conservation with nothing
+   * validating V+F conservation in its place.
+   *
+   * @return True if valid
+   * @throws MetaMissingException if metaType is not walletBundle, or metaId is absent
+   * @throws TransferMalformedException if an F atom value is not a number, or is negative
+   * @throws TransferUnbalancedException if V+F atom values do not sum to zero
+   */
+  isotopeF(): boolean {
+    const isotopeF = this.molecule.getIsotopes('F')
+
+    if (isotopeF.length === 0) {
+      return true
+    }
+
+    for (const atom of isotopeF) {
+      // F atoms must reference a wallet bundle
+      if (!atom.metaType || atom.metaType !== 'walletBundle') {
+        throw new MetaMissingException('Check::isotopeF() - F-isotope atoms must have metaType "walletBundle"!')
+      }
+
+      if (!atom.metaId) {
+        throw new MetaMissingException('Check::isotopeF() - F-isotope atoms must have a metaId!')
+      }
+
+      // Value must be parseable
+      const value = atom.value !== null ? Number(atom.value) : Number.NaN
+      if (Number.isNaN(value)) {
+        throw new TransferMalformedException('Check::isotopeF() - F-isotope atom value is not a valid number!')
+      }
+
+      if (value < 0) {
+        throw new TransferMalformedException('Check::isotopeF() - F-isotope atom value must not be negative!')
+      }
+    }
+
+    // V+F balance conservation: sum of all V and F atom values must equal zero
+    const vAtoms = this.molecule.getIsotopes('V')
+    if (vAtoms.length > 0) {
+      let sum = 0
+      for (const atom of [...vAtoms, ...isotopeF]) {
+        const value = atom.value !== null ? Number(atom.value) : Number.NaN
+        if (!Number.isNaN(value)) {
+          sum += value
+        }
+      }
+      if (sum !== 0) {
+        throw new TransferUnbalancedException('Check::isotopeF() - V+F atom values do not balance to zero!')
+      }
+    }
+
+    return true
+  }
+
+  /**
    * Validate isotope V atoms (value transfers)
    * @param senderWallet - Optional wallet for balance validation
    * @return True if valid
@@ -382,13 +552,22 @@ export default class CheckMolecule {
       return true
     }
 
+    // When B or F atoms are present, cross-isotope conservation is validated
+    // by isotopeB()/isotopeF() — skip V-only conservation check.
+    //
+    // This is deliberately keyed on isotope PRESENCE, not on atom shape. A buffer
+    // deposit is [V,B,V] and a withdraw is [B,V,B]; a shape-based test accepts the
+    // first and rejects the second, which is exactly the defect this mirrors away.
+    const hasCrossIsotope = this.molecule.getIsotopes('B').length > 0 ||
+      this.molecule.getIsotopes('F').length > 0
+
     const firstAtom = this.molecule.atoms[0]
 
     if (!firstAtom) {
       throw new AtomsMissingException('Check::isotopeV() - Missing first atom')
     }
 
-    if (firstAtom.isotope === 'V' && isotopeV.length === 2) {
+    if (!hasCrossIsotope && firstAtom.isotope === 'V' && isotopeV.length === 2) {
       const endAtom = isotopeV[isotopeV.length - 1]
 
       if (!endAtom) {
@@ -402,6 +581,14 @@ export default class CheckMolecule {
       const endValue = endAtom.value !== null ? Number(endAtom.value) : 0
       if (endValue < 0) {
         throw new TransferMalformedException()
+      }
+
+      // Conservation check for 2-atom transfers. This branch returns early, so
+      // without this the general sum check below is never reached and a two-atom
+      // V transfer that creates or destroys value is accepted.
+      const firstValueForPair = firstAtom.value !== null ? Number(firstAtom.value) : 0
+      if ((firstValueForPair + endValue) !== 0) {
+        throw new TransferUnbalancedException()
       }
 
       return true
@@ -449,8 +636,10 @@ export default class CheckMolecule {
       }
     }
 
-    // All atoms must sum to zero for a balanced transaction
-    if (sum !== 0) {
+    // V-only conservation: all V atoms must sum to zero (skip for B/F cross-isotope,
+    // where the balancing atom is a different isotope and conservation is enforced
+    // by isotopeB()/isotopeF() instead)
+    if (!hasCrossIsotope && sum !== 0) {
       throw new TransferUnbalancedException()
     }
 
@@ -470,7 +659,8 @@ export default class CheckMolecule {
       }
 
       // Does the remainder match what should be there in the source wallet, if provided?
-      if (remainder !== sum) {
+      // Skip for cross-isotope (B/F) — conservation is validated by isotopeB()/isotopeF()
+      if (!hasCrossIsotope && remainder !== sum) {
         throw new TransferRemainderException()
       }
     } else if (sum !== 0) {
