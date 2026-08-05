@@ -27,6 +27,11 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '20'
+          # setup-node v5 enables package-manager caching by default (v4 did not). It detects
+          # yarn from the committed .yarnrc.yml and points the cache at yarn's cache folder —
+          # but this workflow installs with `npm install`, so that folder never exists and the
+          # post-run cache save fails with 'Path Validation Error'. Nothing to cache here.
+          package-manager-cache: false
 
       # No lockfile is committed (package-lock.json is gitignored; yarn is the local PM);
       # npm install resolves fresh and writes an ephemeral package-lock.json for npm audit.

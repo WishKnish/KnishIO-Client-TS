@@ -59,6 +59,11 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+          # setup-node v5 enables package-manager caching by default (v4 did not). It detects
+          # yarn from the committed .yarnrc.yml and points the cache at yarn's cache folder —
+          # but this workflow installs with `npm install`, so that folder never exists and the
+          # post-run cache save fails with 'Path Validation Error'. Nothing to cache here.
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm install
@@ -90,6 +95,11 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+          # setup-node v5 enables package-manager caching by default (v4 did not). It detects
+          # yarn from the committed .yarnrc.yml and points the cache at yarn's cache folder —
+          # but this workflow installs with `npm install`, so that folder never exists and the
+          # post-run cache save fails with 'Path Validation Error'. Nothing to cache here.
+          package-manager-cache: false
 
       # Trusted publishing needs npm >= 11.5.1 (newer than the bundled npm).
       - name: Upgrade npm (>= 11.5.1 for trusted publishing)
