@@ -1,6 +1,6 @@
 {
   "name": "@wishknish/knishio-client-ts",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "productName": "Knish.IO TypeScript SDK Client",
   "description": "TypeScript implementation of the Knish.IO SDK to consume Knish.IO GraphQL APIs with enhanced type safety.",
   "license": "GPL-3.0-or-later",
@@ -67,7 +67,7 @@
     "jssha": "^3.3.1",
     "tslib": "^2.8.1",
     "wonka": "^6.3.5",
-    "zod": "^3.23.8"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/isomorphic-fetch": "^0.0.39",
@@ -113,7 +113,7 @@
     "README.md",
     "LICENSE"
   ],
-  "packageManager": "yarn@4.6.0",
+  "packageManager": "yarn@4.15.0",
   "engines": {
     "node": ">=18.0.0"
   }

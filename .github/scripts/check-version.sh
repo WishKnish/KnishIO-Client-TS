@@ -32,6 +32,11 @@ collect() {
 # --- version sources for this repo ------------------------------------------------------
 collect "package.json version" \
   "$(sed -n 's/^  "version": *"\([^"]*\)".*/\1/p' package.json | head -1)"
+# The runtime constant the SDK exports to consumers. It sat at a stale '1.0.0' through the whole
+# 0.7.x-0.9.4 line — exactly the C++ failure described above, in TypeScript — because nothing
+# compared it to the manifest. Now something does.
+collect "src/index.ts SDK_VERSION" \
+  "$(sed -n "s/^export const SDK_VERSION = '\([^']*\)'.*/\1/p" src/index.ts | head -1)"
 # -----------------------------------------------------------------------------------------
 
 mismatches=()

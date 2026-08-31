@@ -13,6 +13,69 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
+## [0.9.5] — 2026-08-31
+
+### Changed — zod 3 → zod 4.5
+
+- The `zod` dependency moves from `^3.23.8` to `^4.5.4`. **Consumer-visible:** installing this
+  SDK now pulls zod 4.5 into your dependency tree instead of zod 3. If you pin zod 3 elsewhere,
+  resolve that before upgrading. The SDK's own public type surface is unchanged — `dist/index.d.ts`
+  contains no zod reference, and no exported symbol changed shape.
+- Every zod construct the SDK used that Zod 4 removed or redefined was migrated. Three were hard
+  failures rather than deprecations: `z.function().args().returns()` and `z.function().optional()`
+  throw while building a module-level schema (so `src/schemas/index.ts` and
+  `src/validation/schemas.ts` would not import at all), and single-argument `z.record(value)`
+  throws a raw `TypeError` at parse time — escaping `safeParse`, so it could not even be reported
+  as a validation failure. Callback fields are now `z.custom<fn>()` and all eleven records pass an
+  explicit `z.string()` key schema.
+- URL-shaped fields keep Zod 3 semantics deliberately. Zod 4's `z.url()` returns the *normalized*
+  `URL.href` — stripping default ports and lowercasing the host — with no opt-out, and the parsed
+  `uri` is the endpoint `KnishIOClient` actually calls. A refinement (`new URL()` in a try/catch,
+  which is precisely what v3 did) validates without rewriting the value, so
+  `http://api.knish.io:80/graphql` survives intact.
+- `BatchIdSchema` keeps Zod 3's UUID acceptance by inlining v3's regex. Zod 4's `z.uuid()`
+  additionally enforces the RFC 9562 version/variant nibbles and would have silently rejected
+  batch IDs the SDK previously accepted.
+- Molecular hashing, atom ordering, WOTS+ signing, SHAKE256 secret/bundle derivation and ML-KEM
+  transport contain no zod code and are untouched. The one path where a zod parse reaches hashed
+  bytes — R-isotope rule molecules, via `Callback`/`Meta` → `JSON.stringify(rules)` → atom meta —
+  is now pinned by `tests/unit/rule-molecule-hash.test.ts` against a digest generated on the
+  pre-migration tree. All six deterministic self-test molecular hashes, plus the canonical
+  SHAKE256 secret and bundle hash, are byte-identical across the upgrade.
+
+### Added
+
+- `tests/unit/zod4-validation.test.ts` and `tests/unit/rule-molecule-hash.test.ts`. The schemas
+  previously had **zero** test coverage, which is why a breaking dependency upgrade could have
+  landed silently; each migrated construct now has an assertion that fails if it regresses.
+
+### Fixed
+
+- **`SDK_VERSION` now reports the real version.** The exported constant had read `'1.0.0'` since
+  before the 0.7.x line while the manifest moved through 0.9.4 — the SDK told every consumer it
+  was 1.0.0. It is now `'0.9.5'`, and `.github/scripts/check-version.sh` (the CI
+  `version consistency` job, which previously inspected only `package.json`) parses this constant
+  too, so the two can never diverge again. Verified in both directions: the gate passes on
+  agreement and fails with `src/index.ts SDK_VERSION is '1.0.0' but package.json version is
+  '0.9.5'` on drift. `SDK_INFO.version` is derived from the constant and is corrected with it.
+  Downstream note: code that worked around the stale constant by reading
+  `@wishknish/knishio-client-ts/package.json` no longer needs to, and any test asserting
+  `SDK_VERSION === '1.0.0'` will need updating when it upgrades to 0.9.5.
+- `EnvironmentConfigSchema` no longer carries `.default()` values that never applied. The outer
+  `.partial()` already made every field optional, so under zod 3 the defaults were dead code; under
+  zod 4 they would have started firing and — because v4's `.default()` no longer parses its own
+  input — emitted the raw strings `'false'` and `'4'` where the client config requires a boolean and
+  a number, silently enabling logging and passing a string server SDK version.
+- The custom "Invalid atom isotope" message is emitted again. It was configured through
+  `z.enum(..., { errorMap })`, which Zod 4 ignores silently, replacing it with a generic message.
+- Dropped an obsolete `as z.ZodTypeAny` cast in `ValidationService.validateEnvironmentConfig`;
+  Zod 4's covariant `ZodType` makes the schema assignable without it.
+- Resolved the pre-existing high-severity `nanoid` advisory (`<3.3.18`, reached via `postcss` in
+  the dev toolchain) by pulling `nanoid` to `3.3.18`. Dev-only, and it did not affect the shipped
+  bundle, but the lockfile was being rewritten for the zod upgrade anyway and the fix satisfies
+  the 7-day cooldown on its own. `yarn npm audit --all --recursive` now reports no high or
+  critical advisories.
+
 ## [0.9.4] — 2026-08-05
 
 ### Fixed

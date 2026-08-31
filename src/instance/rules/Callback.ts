@@ -69,7 +69,7 @@ const CallbackParamsSchema = z.object({
   action: z.string().min(1, 'Action cannot be empty'),
   metaType: z.union([z.string(), z.null()]).optional(),
   metaId: z.union([z.string(), z.null()]).optional(),
-  meta: z.union([z.instanceof(Meta), z.record(z.unknown()), z.null()]).optional(),
+  meta: z.union([z.instanceof(Meta), z.record(z.string(), z.unknown()), z.null()]).optional(),
   address: z.union([z.string(), z.null()]).optional(),
   token: z.union([z.string(), z.null()]).optional(),
   amount: z.union([z.string(), z.null()]).optional(),

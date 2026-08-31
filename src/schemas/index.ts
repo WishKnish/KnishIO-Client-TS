@@ -62,6 +62,21 @@ import { z } from 'zod'
 const hexStringRegex = /^[0-9a-fA-F]+$/
 const base17HashRegex = /^[0-9a-g]+$/
 
+// Zod 3's `.url()` was `try { new URL(v) } catch` and returned the input UNCHANGED.
+// Zod 4's `z.url()` returns the normalized `URL.href` instead — it strips default ports and
+// lowercases the host — and there is no opt-out. The parsed `uri` is the endpoint the client
+// actually talks to (KnishIOClient destructures it out of the validated config), so a
+// refinement is used here: it validates exactly as v3 did without rewriting the value.
+const urlString = (message = 'Invalid URL') =>
+  z.string().refine((value) => {
+    try {
+      new URL(value)
+      return true
+    } catch {
+      return false
+    }
+  }, message)
+
 export const HexStringSchema = z.string()
   .regex(hexStringRegex, 'Must be a valid hexadecimal string')
   .brand<'HexString'>()
@@ -115,7 +130,7 @@ export const CellSlugSchema = z.string()
 // =============================================================================
 
 export const AtomIsotopeSchema = z.enum(['C', 'V', 'U', 'T', 'M', 'I', 'R', 'B', 'F'], {
-  errorMap: () => ({ message: 'Invalid atom isotope. Must be one of: C, V, U, T, M, I, R, B, F' })
+  error: 'Invalid atom isotope. Must be one of: C, V, U, T, M, I, R, B, F'
 })
 
 // =============================================================================
@@ -135,7 +150,7 @@ export const AtomMetaDataSchema = z.object({
 }).strict()
 
 export const MetaDataSchema: z.ZodType<Record<string, any>> = z.lazy(() =>
-  z.record(z.union([
+  z.record(z.string(), z.union([
     MetaDataValueSchema,
     MetaDataSchema,
     z.array(MetaDataSchema)
@@ -186,7 +201,7 @@ export const MoleculeParamsSchema = z.object({
 // =============================================================================
 
 export const KnishIOClientConfigSchema = z.object({
-  uri: z.union([z.string().url(), z.array(z.string().url())]).optional(),
+  uri: z.union([urlString(), z.array(urlString())]).optional(),
   cellSlug: z.union([CellSlugSchema, z.string(), z.null()]).optional(),
   client: z.unknown().optional(),
   socket: z.unknown().optional(),
@@ -209,7 +224,7 @@ export const AuthTokenParamsSchema = z.object({
 export const AuthParamsSchema = z.object({
   cellSlug: z.union([CellSlugSchema, z.string(), z.null()]).optional(),
   encrypt: z.boolean().optional(),
-  callback: z.function().args(z.unknown()).returns(z.void()).optional()
+  callback: z.custom<(arg: unknown) => void>((value) => typeof value === 'function').optional()
 }).strict()
 
 export const GuestAuthParamsSchema = z.object({
@@ -224,7 +239,7 @@ export const TransferParamsSchema = z.object({
   recipient: z.union([WalletAddressSchema, z.string()]),
   amount: z.union([z.number().positive(), z.string().min(1)]),
   token: z.union([TokenSlugSchema, z.string()]).optional(),
-  callbackUrl: z.union([z.string().url(), z.null()]).optional(),
+  callbackUrl: z.union([urlString(), z.null()]).optional(),
   metaType: z.union([MetaTypeSchema, z.string(), z.null()]).optional(),
   metaId: z.union([MetaIdSchema, z.string(), z.null()]).optional(),
   meta: z.union([MetaDataSchema, z.null()]).optional()
@@ -278,7 +293,7 @@ export const MetaQueryParamsSchema = z.object({
   value: z.union([z.string(), z.null()]).optional(),
   latest: z.union([z.boolean(), z.null()]).optional(),
   filter: z.union([z.array(MetaFilterSchema), z.null()]).optional(),
-  queryArgs: z.union([z.record(z.unknown()), z.null()]).optional(),
+  queryArgs: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   count: z.union([z.number().int().min(1), z.null()]).optional(),
   countBy: z.union([z.string(), z.null()]).optional(),
   cellSlug: z.union([CellSlugSchema, z.string(), z.null()]).optional()
@@ -316,7 +331,7 @@ export const SignatureResultSchema = z.object({
 
 export const GraphQLRequestSchema = z.object({
   query: z.string().min(1, 'GraphQL query cannot be empty'),
-  variables: z.record(z.unknown()).optional(),
+  variables: z.record(z.string(), z.unknown()).optional(),
   operationName: z.union([z.string(), z.null()]).optional()
 }).strict()
 
@@ -327,13 +342,13 @@ export const GraphQLErrorSchema = z.object({
     column: z.number().int().min(1)
   })).optional(),
   path: z.array(z.union([z.string(), z.number()])).optional(),
-  extensions: z.record(z.unknown()).optional()
+  extensions: z.record(z.string(), z.unknown()).optional()
 }).strict()
 
 export const GraphQLResponseSchema = z.object({
   data: z.unknown().optional(),
   errors: z.array(GraphQLErrorSchema).nullable().optional(),
-  extensions: z.record(z.unknown()).optional()
+  extensions: z.record(z.string(), z.unknown()).optional()
 }).strict()
 
 // =============================================================================
@@ -343,8 +358,8 @@ export const GraphQLResponseSchema = z.object({
 export const SubscriptionOptionsSchema = z.object({
   operationName: z.string().optional(),
   query: z.string().optional(),
-  variables: z.record(z.unknown()).optional(),
-  callback: z.function().args(z.unknown()).returns(z.void()).optional()
+  variables: z.record(z.string(), z.unknown()).optional(),
+  callback: z.custom<(arg: unknown) => void>((value) => typeof value === 'function').optional()
 }).strict()
 
 // =============================================================================
@@ -364,7 +379,7 @@ export const ValidationResultSchema = z.object({
 
 export const ErrorContextSchema = z.object({
   operation: z.string().optional(),
-  parameters: z.record(z.unknown()).optional(),
+  parameters: z.record(z.string(), z.unknown()).optional(),
   timestamp: z.number().int().min(0).optional(),
   stack: z.string().optional()
 }).strict()
@@ -407,7 +422,7 @@ export const KnishIOErrorTypeSchema = z.enum([
  * Validates and parses data using a Zod schema with enhanced error messages
  */
 export function parseWithSchema<T>(
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T>,
   data: unknown,
   context?: string
 ): T {
@@ -428,7 +443,7 @@ export function parseWithSchema<T>(
  * Type-safe validation that returns a result object instead of throwing
  */
 export function validateWithSchema<T>(
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T>,
   data: unknown
 ): { success: true; data: T } | { success: false; error: string } {
   const result = schema.safeParse(data)
@@ -444,7 +459,7 @@ export function validateWithSchema<T>(
  * Validates multiple values with their respective schemas
  */
 export function validateMultiple<T extends Record<string, any>>(
-  validations: { [K in keyof T]: { schema: z.ZodSchema<T[K]>; data: unknown } }
+  validations: { [K in keyof T]: { schema: z.ZodType<T[K]>; data: unknown } }
 ): T {
   const result = {} as T
   

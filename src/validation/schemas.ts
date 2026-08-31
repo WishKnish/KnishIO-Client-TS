@@ -55,6 +55,20 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import { z } from 'zod'
 
+// Zod 3's `.url()` returned the input UNCHANGED; Zod 4's `z.url()` returns the normalized
+// `URL.href` (strips default ports, lowercases the host) with no opt-out. `KnishIOClientConfig
+// .uri` and `KNISHIO_NODE_URI` both flow into the endpoint the client actually calls, so a
+// refinement is used: it validates exactly as v3 did without rewriting the value.
+const urlString = (message = 'Invalid URL') =>
+  z.string().refine((value) => {
+    try {
+      new URL(value)
+      return true
+    } catch {
+      return false
+    }
+  }, message)
+
 // =============================================================================
 // CORE TYPE SCHEMAS (2025 TYPESCRIPT PATTERN)
 // =============================================================================
@@ -92,7 +106,12 @@ export const TokenSlugSchema = createBrandedSchema('TokenSlug',
 )
 
 export const BatchIdSchema = createBrandedSchema('BatchId',
-  z.string().uuid('Invalid batch ID format')
+  // v3's `.uuid()` regex, inlined verbatim. Zod 4's `z.uuid()` additionally enforces the
+  // RFC 9562 version/variant nibbles and would reject batch IDs v3 accepted.
+  z.string().regex(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    'Invalid batch ID format'
+  )
 )
 
 export const CellSlugSchema = createBrandedSchema('CellSlug',
@@ -152,7 +171,7 @@ export const AtomMetaDataSchema = z.object({
 export const NormalizedMetaSchema = z.object({
   key: z.string(),
   value: z.union([z.string(), z.number(), z.boolean(), z.null()])
-}).passthrough() // Allow additional properties
+}).loose() // Allow additional properties
 
 // =============================================================================
 // CORE ENTITY SCHEMAS
@@ -199,8 +218,8 @@ export const MoleculeParamsSchema = z.object({
 
 export const KnishIOClientConfigSchema = z.object({
   uri: z.union([
-    z.string().url('Invalid URI format'),
-    z.array(z.string().url('Invalid URI format')).min(1)
+    urlString('Invalid URI format'),
+    z.array(urlString('Invalid URI format')).min(1)
   ]).optional(),
   cellSlug: z.union([CellSlugSchema, z.string()]).optional(),
   client: z.unknown().optional(),
@@ -213,13 +232,18 @@ export const KnishIOClientConfigSchema = z.object({
   defaultRequestPolicy: z.enum(['cache-first', 'cache-only', 'network-only', 'cache-and-network']).nullable().optional()
 }).strict()
 
-// Environment configuration with validation
+// Environment configuration with validation.
+// NOTE: no `.default()` here. The outer `.partial()` wraps every field in `optional()`, so
+// under Zod 3 these defaults never fired (an all-unset env parsed to `{}`). Under Zod 4 they
+// DO fire, and because v4's `.default()` no longer parses the default value they would emit
+// the raw strings 'false' and '4' where the consumer (ValidationService -> KnishIOClientConfig)
+// requires a boolean and a number. Dropping them keeps v3's exact observable output.
 export const EnvironmentConfigSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  KNISHIO_NODE_URI: z.string().url().optional(),
+  NODE_ENV: z.enum(['development', 'production', 'test']).optional(),
+  KNISHIO_NODE_URI: urlString().optional(),
   KNISHIO_CELL_SLUG: z.string().optional(),
-  KNISHIO_LOGGING: z.string().transform(val => val === 'true').default('false'),
-  KNISHIO_SERVER_SDK_VERSION: z.string().transform(val => parseInt(val, 10)).default('4')
+  KNISHIO_LOGGING: z.string().transform(val => val === 'true').optional(),
+  KNISHIO_SERVER_SDK_VERSION: z.string().transform(val => parseInt(val, 10)).optional()
 }).partial()
 
 // =============================================================================
@@ -233,7 +257,7 @@ export const TransferParamsSchema = z.object({
     'Amount must be positive'
   ),
   token: z.union([TokenSlugSchema, z.string()]).optional(),
-  callbackUrl: z.string().url().optional(),
+  callbackUrl: urlString().optional(),
   metaType: z.string().optional(),
   metaId: z.string().optional(),
   meta: MetaDataSchema.optional()
@@ -282,7 +306,7 @@ export const MetaQueryParamsSchema = z.object({
   value: z.string().optional(),
   latest: z.boolean().optional(),
   filter: z.string().optional(),
-  queryArgs: z.record(z.unknown()).optional(),
+  queryArgs: z.record(z.string(), z.unknown()).optional(),
   count: z.number().int().min(0).optional(),
   countBy: z.string().optional(),
   cellSlug: z.union([CellSlugSchema, z.string()]).optional()
@@ -308,7 +332,7 @@ export const AuthTokenParamsSchema = z.object({
 export const AuthParamsSchema = z.object({
   cellSlug: z.union([CellSlugSchema, z.string()]).optional(),
   encrypt: z.boolean().optional(),
-  callback: z.function().optional()
+  callback: z.custom<(...args: unknown[]) => unknown>((value) => typeof value === 'function').optional()
 }).strict()
 
 export const GuestAuthParamsSchema = z.object({
@@ -321,7 +345,7 @@ export const GuestAuthParamsSchema = z.object({
 
 export const GraphQLRequestSchema = z.object({
   query: z.string().min(1),
-  variables: z.record(z.unknown()).optional(),
+  variables: z.record(z.string(), z.unknown()).optional(),
   operationName: z.string().optional()
 }).strict()
 
@@ -332,13 +356,13 @@ export const GraphQLErrorSchema = z.object({
     column: z.number().int()
   })).optional(),
   path: z.array(z.union([z.string(), z.number()])).optional(),
-  extensions: z.record(z.unknown()).optional()
+  extensions: z.record(z.string(), z.unknown()).optional()
 }).strict()
 
 export const GraphQLResponseSchema = z.object({
   data: z.unknown().optional(),
   errors: z.array(GraphQLErrorSchema).optional(),
-  extensions: z.record(z.unknown()).optional()
+  extensions: z.record(z.string(), z.unknown()).optional()
 }).strict()
 
 // =============================================================================
@@ -357,7 +381,7 @@ export function safeParse<T>(schema: z.ZodType<T>, data: unknown) {
       error: {
         issues: result.error.issues,
         message: result.error.message,
-        formatted: result.error.format()
+        formatted: z.treeifyError(result.error)
       }
     }
   }

@@ -182,9 +182,7 @@ export class ValidationService {
         KNISHIO_SERVER_SDK_VERSION: process.env.KNISHIO_SERVER_SDK_VERSION
       }
 
-      // cast: EnvironmentConfig uses .default()/.optional() so its inferred input≠output type and
-      // doesn't structurally match safeParse's ZodType<T> param; ZodTypeAny sidesteps the mismatch.
-      const parseResult = safeParse(Schemas.EnvironmentConfig as z.ZodTypeAny, env)
+      const parseResult = safeParse(Schemas.EnvironmentConfig, env)
       
       if (!parseResult.success) {
         return {
