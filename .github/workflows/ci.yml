@@ -23,7 +23,7 @@ jobs:
     name: version consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
         with:
           persist-credentials: false
       - name: Declared versions agree
@@ -33,7 +33,7 @@ jobs:
     name: lint + typecheck + test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
         with:
           persist-credentials: false
 
@@ -49,7 +49,7 @@ jobs:
           echo "OK: no credential in .git/config"
 
       - name: Setup Node 20
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444  # v5
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: '20'
           # setup-node v5 enables package-manager caching by default (v4 did not). It detects
@@ -111,7 +111,7 @@ jobs:
       # fetch-depth: 0 — the gate diffs against the base commit, which a shallow
       # checkout would not have. persist-credentials: false — the diff below reads
       # local objects only; no credential is needed after clone.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
         with:
           fetch-depth: 0
           persist-credentials: false
