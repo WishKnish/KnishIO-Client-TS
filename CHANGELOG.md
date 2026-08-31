@@ -13,7 +13,35 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
+## [Unreleased]
+
+### Fixed
+
+- **CI on Node 20, red immediately after 0.9.6 published.** `tests/unit/request-timeout.test.ts`
+  used `Promise.withResolvers`, which is Node 22+. **No consumer impact:** the published tarball
+  contains only `/src`, `/dist`, `README.md` and `LICENSE` — no test file ships — so the 0.9.6
+  artifact on npm is unaffected and is not being republished. Replaced with the plain executor
+  form, verified against Node 20.20.2 as well as 22.
+- **The release gate was weaker than the CI gate, which is why the above shipped at all.**
+  `publish.yml`'s `verify` job ran only Node 24, while `ci.yml` runs Node 20 — so a Node 22+ API
+  passed the gate, published, and only then turned `master` red. `verify` now runs a
+  `['20', '24']` matrix with `fail-fast: false`, and `publish` still `needs: verify`, so both legs
+  must pass before anything reaches npm. The `publish` job itself stays on Node 24, which npm
+  Trusted Publishing requires. Node 20 is the real floor here: vitest declares
+  `^20 || ^22 || >=24` and eslint `^20.19 || ^22.13 || >=24`, so the suite cannot run lower. The
+  package's own `engines.node: >=18.0.0` is a consumer claim upheld in source by feature guards —
+  `src/libraries/GraphQLClient.ts:158` already falls back when `AbortSignal.any` (Node 18.17+) is
+  absent — and no CI matrix can verify it while the toolchain floor is 20.
+
 ## [0.9.6] — 2026-08-31
+
+**Post-release note.** The `CI` workflow went red on this commit minutes after publication. It is a
+test-only defect — `tests/unit/request-timeout.test.ts` used a Node 22+ API and `ci.yml` runs Node
+20 — and no test file is in the published tarball. The `Publish` workflow, which has its own
+`lint + typecheck + test + build` gate, succeeded end to end. **This release is intact:** the
+artifact was installed from npm and exercised on Node 20.20.2, where `SDK_VERSION` reports `0.9.6`,
+`addPolicy` normalises through `PolicyMeta`, `Molecule.replenishToken` exists and `generateBatchId`
+returns 64 characters. Nothing here needs re-releasing; the fix is under `## [Unreleased]`.
 
 ### Changed — dependency refresh (Dependabot PR #3, validated and split)
 

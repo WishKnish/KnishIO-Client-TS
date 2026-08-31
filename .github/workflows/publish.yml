@@ -32,8 +32,18 @@ jobs:
   # Split out of the publish job on purpose: `environment: release` is a deployment gate that
   # can require approval, and a dry run that uploads nothing should not have to pass it.
   verify:
-    name: verify version + lint + typecheck + test + build
+    name: verify version + lint + typecheck + test + build (node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    # The release gate must be at least as strict as ci.yml, which runs Node 20. When this job
+    # ran only Node 24 it green-lit 0.9.6 with a `Promise.withResolvers` call (Node 22+) in a
+    # test, which then failed ci.yml on Node 20 *after* the package had already published.
+    # 20 is the lowest version the toolchain can run (vitest requires ^20 || ^22 || >=24), so it
+    # is the floor this suite can actually enforce; the package's own `engines.node: >=18.0.0`
+    # applies to consumers and is upheld in source by feature guards, not by this matrix.
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '24']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -56,10 +66,10 @@ jobs:
           fi
           bash .github/scripts/check-version.sh "$EXPECTED"
 
-      - name: Setup Node 24
+      - name: Setup Node ${{ matrix.node }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
           registry-url: 'https://registry.npmjs.org'
           # setup-node v5 enables package-manager caching by default (v4 did not). It detects
           # yarn from the committed .yarnrc.yml and points the cache at yarn's cache folder —
