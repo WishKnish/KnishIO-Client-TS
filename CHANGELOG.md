@@ -13,6 +13,53 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
+## [Unreleased]
+
+### Changed — dependency refresh (Dependabot PR #3, validated and split)
+
+- `@urql/core` `^5.2.0` → `^6.0.3`. urql 6 changes the default HTTP method for queries: it sends
+  GET when query-string + variables fits under 2047 characters. Both client constructions now pin
+  `preferGetMethod: false`, keeping every operation a POST exactly as under urql 5. This is not
+  cosmetic — `GraphQLClient`'s CipherHash transport gates on `typeof init.body === 'string'`, and a
+  GET has no body, so the ML-KEM request encryption would have silently degraded to plaintext URL
+  parameters with no error raised. Pinned and covered by `tests/unit/urql-http-method.test.ts`,
+  which was confirmed to fail (`Received: "GET"`) before the fix.
+- `@noble/post-quantum` `^0.5.4` → `^0.7.0`, and with it `@noble/hashes`/`@noble/curves` 2.0 → 2.3
+  plus a new `@noble/ciphers` transitive. 0.7.0's changelog describes a `MultiplyNTTs` "intermediate
+  overflow" fix; it is a **performance** change, not a correctness one — `mod(mod(a1*b1)*zeta + a0*b0)`
+  is mathematically identical to `mod(a1*b1*zeta + a0*b0)`, and 2³⁵ was already exact in a JS double.
+  Verified rather than assumed: the byte-frozen `mlkem768.keygen.expectedPubkey` canonical vector
+  (deterministic keygen) and all 7 SHAKE256 vectors pass unchanged.
+- `jssha` `^3.3.1` → `^3.3.2`, `graphql-ws` `^6.0.7` → `^6.2.1`, `wonka` `^6.3.5` → `^6.3.6`,
+  `graphql` `^16.11.0` → `^16.14.2`.
+- `graphql` is deliberately **held at 16**. `graphql@17` declares `engines.node: ^22 || ^24 || ^25 || >=26`,
+  which excludes the Node 20 that `ci.yml` and `audit.yml` run and contradicts this package's
+  `engines.node: >=18.0.0`. Adopting it is a supported-runtime decision, not a dependency bump. The
+  SDK's only two `graphql` imports are `import type { DocumentNode }`, so nothing in this codebase
+  needs 17.
+- Dev toolchain: `eslint` `^9` → `^10` (flat config needed no changes), `@typescript-eslint/*`
+  8.63 → 8.67, `vitest`/`@vitest/coverage-v8` 4.1.10 → 4.1.11, `@types/node` `^22` → `^26`,
+  `tsx` → `^4.23.12`, `prettier` → `^3.9.6`.
+- Added a `resolutions` pin for `wonka` at `6.3.6`. urql 6 depends on `wonka@^6.3.2` and resolved
+  its own nested `6.3.5`, so the SDK's `6.3.6` produced two copies and `tsc` treated the two
+  `Source<T>` declarations as distinct types — 7 errors across both clients' `pipe()` chains. One
+  instance fixes it and is semver-legal for urql's range.
+
+### Removed
+
+- `@thumbmarkjs/thumbmarkjs` and `isomorphic-fetch` dependencies, plus the `@types/isomorphic-fetch`
+  dev dependency. All had **zero** references across 157 scanned source, test and config files.
+  PR #3 proposed a 0.19.1 → 1.10.1 major for the former; adopting a major of an unused package is
+  risk without benefit. `tslib` is kept despite having no direct references because
+  `tsconfig.json` sets `importHelpers: true`.
+- `vite` and `vite-plugin-dts` dev dependencies, and the vestigial `dev: vite` script. There is no
+  `vite.config.*`; `tsup` performs the build and the `.d.ts` emission, and vitest supplies its own
+  vite. This also makes PR #3's `vite 7 → 8` major moot and resolves the pre-existing unmet peer
+  (`vite-plugin-dts@5.0.3 doesn't provide typescript to unplugin-dts@1.0.3`) that was failing
+  Dependabot's npm updates — `unplugin-dts` requires `typescript` as a non-optional peer that
+  `vite-plugin-dts` never re-declares, and neither package has a newer release. `yarn explain
+  peer-requirements` now reports zero unmet requirements.
+
 ## [0.9.5] — 2026-08-31
 
 ### Changed — zod 3 → zod 4.5

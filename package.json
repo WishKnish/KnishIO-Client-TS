@@ -58,32 +58,30 @@
     "fips-203"
   ],
   "dependencies": {
-    "@noble/post-quantum": "^0.5.4",
-    "@thumbmarkjs/thumbmarkjs": "^0.19.1",
-    "@urql/core": "^5.2.0",
-    "graphql": "^16.11.0",
-    "graphql-ws": "^6.0.7",
-    "isomorphic-fetch": "^3.0.0",
-    "jssha": "^3.3.1",
+    "@noble/post-quantum": "^0.7.0",
+    "@urql/core": "^6.0.3",
+    "graphql": "^16.14.2",
+    "graphql-ws": "^6.2.1",
+    "jssha": "^3.3.2",
     "tslib": "^2.8.1",
-    "wonka": "^6.3.5",
+    "wonka": "^6.3.6",
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/isomorphic-fetch": "^0.0.39",
     "@types/jssha": "^3.0.0",
-    "@types/node": "^22",
-    "@typescript-eslint/eslint-plugin": "^8.63.0",
-    "@typescript-eslint/parser": "^8.63.0",
-    "@vitest/coverage-v8": "^4.1.10",
-    "eslint": "^9",
-    "prettier": "^3",
+    "@types/node": "^26",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10",
+    "prettier": "^3.9.6",
     "tsup": "^8.5.1",
-    "tsx": "^4.23.0",
+    "tsx": "^4.23.12",
     "typescript": "^5",
-    "vite": "^7",
-    "vite-plugin-dts": "^5.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
+  },
+  "resolutions": {
+    "wonka": "6.3.6"
   },
   "browserslist": [
     "> 1%",
@@ -103,7 +101,6 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "dev": "vite",
     "prepublishOnly": "npm run build",
     "selftest": "npm run build && node self-test.cjs"
   },

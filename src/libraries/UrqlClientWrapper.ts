@@ -155,6 +155,10 @@ class UrqlClientWrapper {
     return createClient({
       url: serverUri,
       exchanges,
+      // urql 6 defaults preferGetMethod to 'within-url-limit', sending short queries as GET with
+      // no body. Keep the urql-5 behaviour (always POST) so this client matches GraphQLClient and
+      // cannot silently change the wire format if it is ever put back into use.
+      preferGetMethod: false,
       fetchOptions: () => ({
         headers: {
           'X-Auth-Token': this.$__authToken
