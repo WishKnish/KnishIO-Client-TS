@@ -12,9 +12,13 @@ import {
   AtomIsotopeSchema,
   AuthParamsSchema,
   SubscriptionOptionsSchema,
-  GraphQLResponseSchema
+  GraphQLResponseSchema,
+  BatchIdSchema as IndexBatchIdSchema
 } from '../../src/schemas/index'
 import { Schemas } from '../../src/validation/schemas'
+import { generateBatchId } from '../../src/libraries/crypto'
+import { isBatchId } from '../../src/types/guards'
+import { assertBatchId } from '../../src/types/assertions'
 
 describe('z.record requires a key schema in Zod 4 (single-arg throws a raw TypeError)', () => {
   it('accepts a plain-object callback meta', () => {
@@ -95,18 +99,52 @@ describe('function-typed schema fields survive the z.function() rewrite', () => 
   })
 })
 
-describe('batch ID keeps Zod 3 UUID acceptance', () => {
-  it('accepts the shapes z.uuid() would have rejected', () => {
-    // Neither of these carries a valid RFC 9562 version/variant nibble, so Zod 4's
-    // z.uuid() rejects them. v3's regex accepted them, and so must we.
-    expect(Schemas.BatchId.safeParse('ffffffff-ffff-ffff-ffff-ffffffffffff').success).toBe(true)
-    expect(Schemas.BatchId.safeParse('1234abcd-12ab-9cde-8fab-1234567890ab').success).toBe(true)
-    expect(Schemas.BatchId.safeParse('550e8400-e29b-41d4-a716-446655440000').success).toBe(true)
+describe('batch ID matches the format generateBatchId actually emits', () => {
+  // Superseded in 0.9.6. This block previously pinned Zod 3's `.uuid()` acceptance, which the
+  // zod 4 migration preserved faithfully — but the UUID shape was wrong all along:
+  // generateBatchId returns shake256(molecularHash + index, 256) or randomString(64) over
+  // 'abcdef0123456789', i.e. 64 hex characters, and isBatchId in src/types/guards.ts agrees.
+  // The old schema therefore rejected every batch ID this SDK can produce.
+  it('accepts real 64-hex batch IDs', () => {
+    expect(Schemas.BatchId.safeParse(generateBatchId({ molecularHash: 'a'.repeat(64), index: 0 }).toString()).success).toBe(true)
+    expect(Schemas.BatchId.safeParse('0'.repeat(64)).success).toBe(true)
+    expect(Schemas.BatchId.safeParse('f'.repeat(64)).success).toBe(true)
   })
 
-  it('still rejects malformed batch IDs', () => {
-    expect(Schemas.BatchId.safeParse('550e8400e29b41d4a716446655440000').success).toBe(false)
-    expect(Schemas.BatchId.safeParse('g50e8400-e29b-41d4-a716-446655440000').success).toBe(false)
+  it('rejects the UUID shape it used to require, and other malformed input', () => {
+    expect(Schemas.BatchId.safeParse('ffffffff-ffff-ffff-ffff-ffffffffffff').success).toBe(false)
+    expect(Schemas.BatchId.safeParse('550e8400-e29b-41d4-a716-446655440000').success).toBe(false)
+    expect(Schemas.BatchId.safeParse('550e8400e29b41d4a716446655440000').success).toBe(false) // 32 chars
+    expect(Schemas.BatchId.safeParse('g'.repeat(64)).success).toBe(false) // not hex
+  })
+
+  // Four places define "batch ID": the two zod schemas, the isBatchId guard, and assertBatchId
+  // (public API via the `assertions.batchId` registry). They disagreed before 0.9.6 — the schemas
+  // demanded a UUID while the guard and the generator used 64 hex. Pin the agreement.
+  it('agrees with the isBatchId guard and assertBatchId on generated IDs', () => {
+    for (const id of [generateBatchId({}), generateBatchId({ molecularHash: 'b'.repeat(64), index: 3 })]) {
+      expect(isBatchId(id)).toBe(true)
+      expect(Schemas.BatchId.safeParse(id).success).toBe(true)
+      expect(IndexBatchIdSchema.safeParse(id).success).toBe(true)
+      expect(() => assertBatchId(id)).not.toThrow()
+    }
+  })
+
+  it('assertBatchId rejects a UUID and says so without claiming UUID format', () => {
+    const uuid = '550e8400-e29b-41d4-a716-446655440000'
+    expect(isBatchId(uuid)).toBe(false)
+    expect(() => assertBatchId(uuid)).toThrow()
+
+    // The diagnostics used to read "BatchId (UUID format)" / "UUID v4 format", which would send a
+    // developer to supply the one shape the guard rejects.
+    let thrown: unknown
+    try {
+      assertBatchId(uuid)
+    } catch (error) {
+      thrown = error
+    }
+    expect(String((thrown as Error).message)).not.toContain('UUID')
+    expect(String((thrown as Error).message)).toContain('64-character hex')
   })
 })
 

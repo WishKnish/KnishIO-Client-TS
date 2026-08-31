@@ -106,12 +106,12 @@ export const TokenSlugSchema = createBrandedSchema('TokenSlug',
 )
 
 export const BatchIdSchema = createBrandedSchema('BatchId',
-  // v3's `.uuid()` regex, inlined verbatim. Zod 4's `z.uuid()` additionally enforces the
-  // RFC 9562 version/variant nibbles and would reject batch IDs v3 accepted.
-  z.string().regex(
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
-    'Invalid batch ID format'
-  )
+  // 64 hex characters. generateBatchId (src/libraries/crypto.ts) returns either
+  // shake256(molecularHash + index, 256) — 256 bits, 64 hex chars — or randomString(64) over the
+  // alphabet 'abcdef0123456789'. A UUID shape matches nothing this SDK can produce, so the
+  // previous 8-4-4-4-12 regex rejected every real batch ID. Agrees with isBatchId in
+  // src/types/guards.ts.
+  z.string().regex(/^[0-9a-fA-F]{64}$/, 'Invalid batch ID format')
 )
 
 export const CellSlugSchema = createBrandedSchema('CellSlug',

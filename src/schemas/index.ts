@@ -117,7 +117,7 @@ export const MetaIdSchema = z.string()
   .brand<'MetaId'>()
 
 export const BatchIdSchema = z.string()
-  .min(1, 'Batch ID cannot be empty')
+  .regex(/^[0-9a-fA-F]{64}$/, 'Batch ID must be 64 hexadecimal characters')
   .brand<'BatchId'>()
 
 export const CellSlugSchema = z.string()

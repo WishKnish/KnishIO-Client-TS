@@ -399,12 +399,12 @@ export function assertBatchId(
 ): asserts value is BatchId {
   if (!isBatchId(value)) {
     throw new AssertionError(
-      createAssertionMessage('BatchId (UUID format)', value, context),
+      createAssertionMessage('BatchId (64-character hex)', value, context),
       'BatchId',
       value,
       { 
         operation: 'batch_id_assertion',
-        expected: 'UUID v4 format',
+        expected: '64-character hexadecimal string',
         actual: value,
         field: context
       }

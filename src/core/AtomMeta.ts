@@ -47,6 +47,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 */
 
 import Meta, { type NormalizedMeta } from './Meta'
+import PolicyMeta from './PolicyMeta'
 
 // Configuration constants matching JS SDK
 const USE_META_CONTEXT = false
@@ -172,12 +173,19 @@ export default class AtomMeta {
    * @return This instance for chaining
    */
   addPolicy(policy: Record<string, any>): AtomMeta {
-    // For now, just stringify the policy
-    // TODO: Implement PolicyMeta class if needed
+    // Normalise through PolicyMeta before serialising. PolicyMeta.fillDefault adds a default
+    // entry for every meta key not already covered by the caller's policy, so the stored string
+    // carries materially more than the input — and this string is hashed into the atom, so a
+    // raw JSON.stringify(policy) diverges from every other SDK.
+    // Matches JS SDK AtomMeta.addPolicy (AtomMeta.js:170-175), including passing
+    // Object.keys(this.meta): `meta` is a NormalizedMeta[] in both SDKs, so these are array
+    // indices rather than meta key names. Faithful to the JS behaviour — do not "correct" it.
+    const policyMeta = new PolicyMeta(policy, Object.keys(this.meta))
+
     this.merge({
-      policy: JSON.stringify(policy)
+      policy: policyMeta.toJson()
     })
-    
+
     return this
   }
 

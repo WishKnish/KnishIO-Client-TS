@@ -104,6 +104,7 @@ import MutationLinkIdentifier from '@/mutation/MutationLinkIdentifier'
 import MutationPeering from '@/mutation/MutationPeering'
 import MutationAppendRequest from '@/mutation/MutationAppendRequest'
 import MutationProposeMolecule from '@/mutation/MutationProposeMolecule'
+import MutationReplenishToken from '@/mutation/MutationReplenishToken'
 
 // Response imports
 import ResponseProposeMolecule from '@/response/ResponseProposeMolecule'
@@ -1836,27 +1837,55 @@ export default class KnishIOClient {
   }
 
   /**
-   * Replenish tokens
+   * Replenish a non-finite token supply.
+   * Matches JS SDK KnishIOClient.replenishToken (KnishIOClient.js:2195-2231).
    */
   async replenishToken({
     token,
     amount = null,
     units = null,
-    sourceWallet: _sourceWallet = null
+    sourceWallet = null
   }: {
     token: TokenSlug | string
     amount?: number | string | null
-    units?: string[] | null
+    units?: Array<[string, string, Record<string, any>?]> | null
     sourceWallet?: Wallet | null
   }): Promise<Response> {
     this.log('info', `KnishIOClient::replenishToken() - Replenishing ${amount || 'units'} of ${token}...`)
 
-    // Similar to requestTokens but with specific replenishment logic
-    return this.requestTokens({
-      token,
-      amount,
-      units
+    if (!sourceWallet) {
+      sourceWallet = (await this.queryBalance({ token }))?.payload() as Wallet | null
+    }
+    if (!sourceWallet) {
+      throw new TransferBalanceException('Source wallet is missing or invalid.')
+    }
+
+    // Remainder wallet (same token, so the V-isotope pair conserves)
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+
+    const molecule = await this.createMolecule({
+      sourceWallet,
+      remainderWallet
     })
+    molecule.replenishToken({
+      amount: Number(amount ?? 0),
+      units: units ?? []
+    })
+    molecule.sign({ bundle: this.getBundle() })
+    molecule.check()
+
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationReplenishToken,
+      molecule
+    })
+
+    const response = await this.executeQuery(mutation)
+
+    if (!response) {
+      throw new CodeException('Token replenishment failed')
+    }
+
+    return response
   }
 
   /**

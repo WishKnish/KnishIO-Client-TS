@@ -756,6 +756,67 @@ export default class Molecule {
   }
 
   /**
+   * Replenishes non-finite token supplies.
+   * Matches JS SDK Molecule.replenishToken (Molecule.js:521-566) exactly.
+   *
+   * Two orderings here are load-bearing for the molecular hash and must not be reordered:
+   * the remainder balance is computed BEFORE the source balance is overwritten, and the
+   * source V-atom is added BEFORE the remainder V-atom.
+   */
+  replenishToken({
+    amount,
+    units = []
+  }: {
+    amount: number
+    units?: Array<[string, string, Record<string, any>?]>
+  }): Molecule {
+    if (amount < 0) {
+      throw new NegativeAmountException('Molecule::replenishToken() - Amount to replenish must be positive!')
+    }
+
+    if (!this.sourceWallet || !this.remainderWallet) {
+      throw new Error('Source and remainder wallets required for token replenishment')
+    }
+
+    if (units.length) {
+      // Prepare token units to formatted style
+      const formatted = Wallet.getTokenUnits(units)
+
+      // Merge token units with source wallet & new items
+      this.remainderWallet.tokenUnits = this.sourceWallet.tokenUnits
+      for (const unit of formatted) {
+        this.remainderWallet.tokenUnits.push(unit)
+      }
+      this.remainderWallet.balance = String(this.remainderWallet.tokenUnits.length)
+
+      // Override first atom's token units to replenish values
+      this.sourceWallet.tokenUnits = formatted
+      this.sourceWallet.balance = String(this.sourceWallet.tokenUnits.length)
+    } else {
+      // Update wallet's balances
+      this.remainderWallet.balance = String(Number(this.sourceWallet.balance) + amount)
+      this.sourceWallet.balance = String(amount)
+    }
+
+    // Initializing a new Atom to remove tokens from source
+    this.addAtom(Atom.create({
+      isotope: 'V',
+      wallet: this.sourceWallet,
+      value: Number(this.sourceWallet.balance)
+    }))
+
+    this.addAtom(Atom.create({
+      isotope: 'V',
+      wallet: this.remainderWallet,
+      value: Number(this.remainderWallet.balance),
+      metaType: 'walletBundle',
+      metaId: this.remainderWallet.bundle!
+    }))
+
+    return this
+  }
+
+  /**
    * Initialize authorization request
    * Creates U-isotope (authorization) atom for requesting auth token
    * Matches JavaScript SDK Molecule.initAuthorization

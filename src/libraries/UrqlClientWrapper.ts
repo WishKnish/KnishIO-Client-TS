@@ -159,12 +159,13 @@ class UrqlClientWrapper {
       // no body. Keep the urql-5 behaviour (always POST) so this client matches GraphQLClient and
       // cannot silently change the wire format if it is ever put back into use.
       preferGetMethod: false,
+      // No `signal` here: urql's makeFetchSource overwrites init.signal with its own
+      // AbortController, so a timeout passed through fetchOptions() is silently discarded and
+      // never fires. GraphQLClient applies its 60s timeout inside a wrapping `fetch` instead.
       fetchOptions: () => ({
         headers: {
           'X-Auth-Token': this.$__authToken
-        },
-        // Add 60 second timeout for debugging
-        signal: AbortSignal.timeout(60000)
+        }
       })
     })
   }

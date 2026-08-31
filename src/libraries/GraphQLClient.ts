@@ -146,16 +146,25 @@ export default class GraphQLClient implements IGraphQLClient {
       // envelope below — cipherFetch's `typeof init.body === 'string'` guard fails on a GET, so
       // the query would leave as plaintext URL parameters with no error. Pin POST explicitly.
       preferGetMethod: false,
-      // PQ-transport Phase E: when encryption is on, route fetch through the CipherHash wrapper
-      // (encrypt the request body to the validator's ML-KEM pubkey, decrypt the response).
-      // Omitted → urql uses the global fetch (plaintext).
-      ...(this.cipherLink ? { fetch: ((input: any, init: any) => this.cipherFetch(input, init)) as typeof fetch } : {}),
+      // Always route through our own fetch. Two reasons: (1) PQ-transport Phase E — when
+      // encryption is on, cipherFetch wraps the request body in the CipherHash envelope and
+      // decrypts the response; (2) the 60s timeout. urql's makeFetchSource unconditionally
+      // overwrites init.signal with its own AbortController, so a signal returned from
+      // fetchOptions() is discarded and never fired. Combining it here is the only place it
+      // survives.
+      fetch: ((input: RequestInfo | URL, init?: RequestInit) => {
+        const timeoutSignal = AbortSignal.timeout(60000)
+        // Keep urql's own signal so teardown still aborts; AbortSignal.any needs Node >= 18.17.
+        const signal = init?.signal && typeof AbortSignal.any === 'function'
+          ? AbortSignal.any([init.signal, timeoutSignal])
+          : (init?.signal ?? timeoutSignal)
+        const timedInit: RequestInit = { ...init, signal }
+        return this.cipherLink ? this.cipherFetch(input, timedInit) : fetch(input, timedInit)
+      }) as typeof fetch,
       fetchOptions: () => ({
         headers: {
           'X-Auth-Token': this.$__authToken
-        },
-        // Add 60 second timeout
-        signal: AbortSignal.timeout(60000)
+        }
       })
     })
   }

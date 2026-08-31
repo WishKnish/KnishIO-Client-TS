@@ -659,13 +659,11 @@ export function verifyOTSSignature(
     const enumerated = enumerateMolecularHash(base17Hash)
     const normalized = normalizeMolecularHash(enumerated)
     
-    // Step 2: Process OTS fragments (handle compression if needed)
-    let ots = otsFragments
+    // Step 2: Fragments must be the uncompressed 2048-character form. Base64-compressed
+    // signatures are not supported and are rejected here rather than expanded.
+    const ots = otsFragments
     if (ots.length !== 2048) {
-      // If not 2048 chars, it might be base64 compressed - for now, assume uncompressed
-      if (ots.length !== 2048) {
-        return false // Invalid signature length
-      }
+      return false
     }
     
     // Step 3: Subdivide OTS into 16 segments of 128 characters each

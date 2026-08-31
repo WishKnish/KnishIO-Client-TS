@@ -23,7 +23,7 @@ jobs:
     name: version consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: Declared versions agree
@@ -33,7 +33,7 @@ jobs:
     name: lint + typecheck + test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
@@ -111,7 +111,7 @@ jobs:
       # fetch-depth: 0 — the gate diffs against the base commit, which a shallow
       # checkout would not have. persist-credentials: false — the diff below reads
       # local objects only; no credential is needed after clone.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false

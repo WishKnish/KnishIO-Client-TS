@@ -51,6 +51,7 @@ import { randomString, chunkSubstr, isHex } from '@/libraries/strings'
 import { generateBundleHash, generateSecret, shake256, generateBatchId } from '@/libraries/crypto'
 import WalletCredentialException from '@/exception/WalletCredentialException'
 import { isBundleHash } from '@/types'
+import TokenUnit from '@/core/TokenUnit'
 // Post-quantum cryptography for ML-KEM768 key encapsulation
 import { ml_kem768 } from '@noble/post-quantum/ml-kem.js'
 
@@ -271,12 +272,13 @@ export default class Wallet {
   }
 
   /**
-   * Get formatted token units from raw data
-   * Stub implementation for now
+   * Map raw token-unit tuples to TokenUnit instances.
+   * Matches JS SDK Wallet.getTokenUnits (Wallet.js:190-196). The serialised shape reaches hashed
+   * atom meta via AtomMeta.setAtomWallet -> JSON.stringify(getTokenUnitsData()), so returning raw
+   * tuples here would diverge from every other SDK.
    */
-  static getTokenUnits(unitsData: any[]): any[] {
-    // TODO: Implement TokenUnit class if needed
-    return unitsData
+  static getTokenUnits(unitsData: Array<[string, string, Record<string, any>?]>): TokenUnit[] {
+    return unitsData.map(unitData => TokenUnit.createFromDB(unitData))
   }
 
   /**

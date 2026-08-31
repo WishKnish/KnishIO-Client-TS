@@ -13,7 +13,7 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
-## [Unreleased]
+## [0.9.6] — 2026-08-31
 
 ### Changed — dependency refresh (Dependabot PR #3, validated and split)
 
@@ -50,8 +50,9 @@ detail, the entry says so instead of guessing.
 - `@thumbmarkjs/thumbmarkjs` and `isomorphic-fetch` dependencies, plus the `@types/isomorphic-fetch`
   dev dependency. All had **zero** references across 157 scanned source, test and config files.
   PR #3 proposed a 0.19.1 → 1.10.1 major for the former; adopting a major of an unused package is
-  risk without benefit. `tslib` is kept despite having no direct references because
-  `tsconfig.json` sets `importHelpers: true`.
+  risk without benefit. **Consumer-visible:** if your application imported either package without
+  declaring it, relying on this SDK to pull it in, add it to your own manifest. `tslib` is kept
+  despite having no direct references because `tsconfig.json` sets `importHelpers: true`.
 - `vite` and `vite-plugin-dts` dev dependencies, and the vestigial `dev: vite` script. There is no
   `vite.config.*`; `tsup` performs the build and the `.d.ts` emission, and vitest supplies its own
   vite. This also makes PR #3's `vite 7 → 8` major moot and resolves the pre-existing unmet peer
@@ -59,6 +60,70 @@ detail, the entry says so instead of guessing.
   Dependabot's npm updates — `unplugin-dts` requires `typescript` as a non-optional peer that
   `vite-plugin-dts` never re-declares, and neither package has a newer release. `yarn explain
   peer-requirements` now reports zero unmet requirements.
+
+### Fixed — bugs found by auditing the implementation against the JS SDK
+
+Ordered by severity. Each was reproduced against the working tree before being fixed; none is
+inferred from a comment or a changelog.
+
+- **`AtomMeta.addPolicy` serialised the wrong string into hashed atom meta.** It did
+  `JSON.stringify(policy)` on the caller's raw object, bypassing `PolicyMeta` entirely, so the
+  `policy` meta value that `Atom.getHashableValues` pushes into the molecular hash omitted the
+  `fillDefault` additions and the normalised key shape the JS SDK produces. Every policy-bearing
+  molecule this SDK signed carried a digest no other implementation would reproduce. Now normalised
+  through `PolicyMeta` first, matching `AtomMeta.js:170-175`. **Consumer-visible:** a policy-bearing
+  molecule now hashes differently than it did under `≤0.9.5`, so any molecular hash your application
+  recorded from this SDK for such a molecule will not match one produced here now. The new bytes are
+  the correct ones — they are what every other SDK produces, and the old ones were reproducible by
+  none — so this is a correction toward the cross-SDK contract, not a change of it. `PolicyMeta`
+  itself was verified line-for-line against `PolicyMeta.js` and is a faithful port — including the
+  `Array.from(this.policy)` quirk on a plain object — and was deliberately left untouched.
+- **The 60-second request timeout never fired.** Both clients returned
+  `signal: AbortSignal.timeout(60000)` from `fetchOptions()`, but urql's `makeFetchSource` does
+  `t.signal = new AbortController().signal` unconditionally, discarding it. A request to an
+  unresponsive validator hung indefinitely. The timeout is now applied inside the wrapping `fetch`
+  that `GraphQLClient` controls, composed with urql's teardown signal via `AbortSignal.any`, so
+  teardown-abort still works. The ineffective `signal` entry was removed from `UrqlClientWrapper`.
+- **`Schemas.BatchId` rejected every batch ID the SDK generates.** The schema required a UUID-shaped
+  `8-4-4-4-12` string, while `generateBatchId` returns `shake256(molecularHash + index, 256)` or
+  `randomString(64)` over `abcdef0123456789` — 64 hex characters — which is also what the
+  `isBatchId` guard requires. **Four** places defined "batch ID" and they disagreed: the two zod
+  schemas demanded a UUID, while the guard and the generator used 64 hex. Both schemas corrected
+  (`src/schemas/index.ts`, `src/validation/schemas.ts`), and `assertBatchId`'s diagnostics — public
+  API through the `assertions.batchId` registry — no longer report `BatchId (UUID format)` /
+  `UUID v4 format`, which would have sent a developer to supply the one shape `isBatchId` rejects.
+  The predicate there was already correct, so only the messages changed. A test now pins agreement
+  across all four on generated IDs, and asserts the message no longer claims UUID; it was confirmed
+  to fail against the old strings.
+- **`KnishIOClient.replenishToken` submitted the wrong molecule type.** It delegated to
+  `requestTokens` — a different operation on the wire — because `Molecule.replenishToken` was
+  missing from this SDK entirely. Ported from `Molecule.js:521-566`, preserving the two orderings
+  that are load-bearing for the molecular hash, and the client now builds, signs and checks a real
+  replenishment molecule. Added `MutationReplenishToken` for the concrete mutation type: the JS SDK
+  instantiates `MutationProposeMolecule` directly, but that class is abstract here because it
+  declares `fillMolecule`; the subclass inherits the identical `ProposeMolecule` document, so the
+  request on the wire is unchanged.
+- **`Wallet.getTokenUnits` returned its raw input.** A stub with a stale `TODO: Implement TokenUnit
+  class if needed` — `TokenUnit` has existed and been exported since `src/index.ts:157`. Raw tuples
+  reach hashed atom meta through `AtomMeta.setAtomWallet`'s `JSON.stringify(getTokenUnitsData())`,
+  so they would have serialised differently from every other SDK. Now maps through
+  `TokenUnit.createFromDB`, matching `Wallet.js:190-196`.
+- `verifyOTSSignature` had an unreachable duplicate branch: the inner `if (ots.length !== 2048)`
+  was identical to the outer one. Collapsed to a single check, with the comment corrected to
+  describe the documented limitation it actually implements (compressed fragments are rejected,
+  not expanded). Export-only — no internal caller — so this is cleanup, not a live defect.
+- `actions/checkout` pins were commented `# v5` at all five sites while the pinned SHA
+  `3d3c42e5aac5ba805825da76410c181273ba90b1` is tagged `v7`/`v7.0.1`. Nothing was functionally
+  wrong, but this repo SHA-pins deliberately for supply-chain review and the comment is the
+  human-readable audit trail. Comments corrected; the SHAs are unchanged.
+
+Byte-identity for the two fixes that change hashed bytes was proven, not assumed: cross-SDK probes
+built the same policy atom and the same replenishment molecule in both this SDK and
+`sdks/KnishIO-Client-JS` from pinned inputs, and both digests were character-identical. Those
+digests are pinned as hard-coded expectations in `tests/unit/atom-meta-policy.test.ts` and
+`tests/unit/replenish-token.test.ts`. The 10 deterministic values in the cross-SDK self-test are
+unchanged; `tests.bufferFamily.molecularHash` differs per run by construction (freshly random
+wallet positions) and was confirmed to differ between two runs on an unchanged tree.
 
 ## [0.9.5] — 2026-08-31
 
@@ -288,6 +353,9 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
+[0.9.6]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.6
+[0.9.5]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.5
+[0.9.4]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.4
 [0.9.3]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.3
 [0.9.2]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.2
 [0.9.1]: https://www.npmjs.com/package/@wishknish/knishio-client-ts/v/0.9.1
