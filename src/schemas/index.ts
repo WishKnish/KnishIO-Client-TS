@@ -207,7 +207,8 @@ export const KnishIOClientConfigSchema = z.object({
   socket: z.unknown().optional(),
   serverSdkVersion: z.number().int().min(1).optional(),
   logging: z.boolean().optional(),
-  defaultRequestPolicy: z.enum(['cache-first', 'cache-only', 'network-only', 'cache-and-network']).nullable().optional()
+  defaultRequestPolicy: z.enum(['cache-first', 'cache-only', 'network-only', 'cache-and-network']).nullable().optional(),
+  secretStorage: z.unknown().optional()
 }).strict()
 
 // =============================================================================

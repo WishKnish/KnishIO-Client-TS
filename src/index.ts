@@ -261,11 +261,38 @@ export {
   SignatureMismatchException,
   TransferBalanceException,
   WalletCredentialException,
+  SecretStorageException,
   InvalidResponseException,
   ExceptionFactory,
   EXCEPTION_TYPES,
   EXCEPTION_CODES
 } from './exception'
+
+// =============================================================================
+// SECRET STORAGE & HARDWARE ENVELOPE ENCRYPTION
+// =============================================================================
+
+export {
+  MemorySecretStorageProvider,
+  WebCryptoSecretStorageProvider,
+  MemoryStorageBackend,
+  createDefaultSecretStorage,
+  type IStorageBackend,
+  type CreateSecretStorageOptions
+} from './storage'
+
+export {
+  zeroizeBytes,
+  withSecureBytes,
+  withSecureString,
+  constantTimeCompare
+} from './libraries/secureMemory'
+
+export type {
+  SecretStorageMetadata,
+  EncryptedSecretPayload,
+  ISecretStorageProvider
+} from './types/storage'
 
 // =============================================================================
 // TYPE DEFINITIONS

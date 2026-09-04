@@ -62,6 +62,7 @@ export { default as MolecularHashMismatchException } from './MolecularHashMismat
 export { default as SignatureMismatchException } from './SignatureMismatchException'
 export { default as TransferBalanceException } from './TransferBalanceException'
 export { default as WalletCredentialException } from './WalletCredentialException'
+export { default as SecretStorageException } from './SecretStorageException'
 export { default as InvalidResponseException } from './InvalidResponseException'
 
 // Additional exceptions (now implemented)

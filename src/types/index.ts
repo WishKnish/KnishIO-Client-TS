@@ -633,5 +633,5 @@ export function createMolecularHash(value: string): MolecularHash {
 export * from './client'
 export * from './crypto'
 export * from './graphql'
-
+export * from './storage'
 // All types are already exported via the export * statements above

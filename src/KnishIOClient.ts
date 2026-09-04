@@ -128,6 +128,8 @@ import {
   SignatureMismatchException,
   AtomIndexException
 } from '@/exception'
+import type { ISecretStorageProvider } from '@/types/storage'
+import MemorySecretStorageProvider from '@/storage/MemorySecretStorageProvider'
 
 // Type imports
 import type {
@@ -150,6 +152,7 @@ import type {
 export default class KnishIOClient {
   private $__secret: string = ''
   private $__bundle: string = ''
+  private $__secretStorage: ISecretStorageProvider | null = null
   private $__cellSlug: string | null = null
   private $__encrypt: boolean = false
   private $__uris: string[] = []
@@ -185,6 +188,7 @@ export default class KnishIOClient {
     serverSdkVersion?: number
     logging?: boolean
     defaultRequestPolicy?: RequestPolicy | null
+    secretStorage?: ISecretStorageProvider | null
   }) {
     // Phase 2 Enhancement: Use standardized configuration validation
     const standardValidationResult = ConfigValidator.validateClientConfig(config)
@@ -236,6 +240,10 @@ export default class KnishIOClient {
       logging,
       defaultRequestPolicy
     })
+
+    if (config.secretStorage) {
+      this.$__secretStorage = config.secretStorage
+    }
   }
 
   /**
@@ -365,6 +373,7 @@ export default class KnishIOClient {
   reset(): void {
     this.$__secret = ''
     this.$__bundle = ''
+    this.$__secretStorage = null
     this.$__encrypt = false
     this.$__cellSlug = null
     this.$__authToken = null
@@ -434,7 +443,7 @@ export default class KnishIOClient {
    * Returns whether a secret is stored for this session
    */
   hasSecret(): boolean {
-    return !!this.$__secret && this.$__secret.length > 0
+    return (!!this.$__secret && this.$__secret.length > 0) || (!!this.$__secretStorage && !!this.$__bundle && this.$__bundle.length > 0)
   }
 
   /**
@@ -445,6 +454,36 @@ export default class KnishIOClient {
       throw new UnauthenticatedException('KnishIOClient::getSecret() - Unable to find a stored secret! Have you set a secret?')
     }
     return this.$__secret
+  }
+
+  /**
+   * Sets the secret storage provider and optionally sets the bundle hash
+   */
+  setSecretStorage(storage: ISecretStorageProvider, bundleHash?: string): void {
+    this.$__secretStorage = storage
+    if (bundleHash) {
+      this.$__bundle = bundleHash
+    }
+  }
+
+  /**
+   * Returns current secret storage provider
+   */
+  getSecretStorage(): ISecretStorageProvider | null {
+    return this.$__secretStorage
+  }
+
+  /**
+   * Asynchronously retrieves the secret from storage or returns in-memory secret
+   */
+  async retrieveSecret(options?: { passphrase?: string }): Promise<string | null> {
+    if (this.$__secret && this.$__secret.length > 0) {
+      return this.$__secret
+    }
+    if (this.$__secretStorage && this.$__bundle && this.$__bundle.length > 0) {
+      return await this.$__secretStorage.retrieveSecret(this.$__bundle, options)
+    }
+    return null
   }
 
   /**
@@ -494,6 +533,14 @@ export default class KnishIOClient {
     remainderWallet?: Wallet | null
   } = {}): Promise<Molecule> {
     this.log('info', 'KnishIOClient::createMolecule() - Creating a new molecule...')
+
+    if (!secret) {
+      if (this.$__secret && this.$__secret.length > 0) {
+        secret = this.getSecret()
+      } else if (this.$__secretStorage && this.$__bundle && this.$__bundle.length > 0) {
+        secret = await this.$__secretStorage.retrieveSecret(this.$__bundle)
+      }
+    }
 
     secret = secret || this.getSecret()
     bundle = bundle || this.getBundle()
@@ -547,6 +594,7 @@ export default class KnishIOClient {
 
     return new Molecule({
       secret,
+      bundle,
       sourceWallet,
       remainderWallet: this.getRemainderWallet()!,
       cellSlug: this.getCellSlug(),
@@ -612,8 +660,9 @@ export default class KnishIOClient {
     // Guard with $__authInProcess to prevent recursive auth refresh
     if (this.$__authToken && this.$__authToken.isExpired() && !this.$__authInProcess) {
       this.log('info', 'KnishIOClient::executeQuery() - Access token is expired. Getting new one...')
+      const authSecret = this.$__secret || (await this.retrieveSecret()) || ''
       await this.requestAuthToken({
-        secret: this.$__secret,
+        secret: authSecret,
         cellSlug: this.$__cellSlug,
         encrypt: this.$__encrypt
       })
@@ -673,6 +722,13 @@ export default class KnishIOClient {
   setSecret(secret: string): void {
     this.$__secret = secret
     this.$__bundle = generateBundleHash(secret)
+    if (!this.$__secretStorage) {
+      const memStorage = new MemorySecretStorageProvider()
+      memStorage.storeSecret(this.$__bundle, secret)
+      this.$__secretStorage = memStorage
+    } else {
+      this.$__secretStorage.storeSecret(this.$__bundle, secret)
+    }
   }
 
   /**
@@ -922,6 +978,11 @@ export default class KnishIOClient {
     // Generate a secret from the seed if provided
     if (secret === null && seed) {
       secret = generateSecret(seed)
+    }
+
+    // Retrieve secret from storage provider if available
+    if (secret === null && this.$__secretStorage && this.$__bundle) {
+      secret = await this.$__secretStorage.retrieveSecret(this.$__bundle)
     }
 
     // Set cell slug if provided
