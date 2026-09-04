@@ -15,7 +15,29 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [0.9.7] — 2026-09-04
+
+### Added
+
+- **Hardware Envelope Encryption & Secure Memory Provider**: Introduced pluggable `ISecretStorageProvider`
+  interface (`src/types/storage.ts`) and `SecretStorageException` (`src/exception/SecretStorageException.ts`).
+- **WebCrypto Envelope Encryption Provider** (`src/storage/WebCryptoSecretStorageProvider.ts`): Provides AES-GCM
+  (256-bit) envelope encryption with PBKDF2-HMAC-SHA256 (100,000 iterations) key derivation, supporting
+  pluggable storage backends (default in-memory, localStorage, IndexedDB) and auto-zeroized intermediate buffers.
+- **In-Memory Storage Provider** (`src/storage/MemorySecretStorageProvider.ts`): Built-in zero-dependency
+  fallback for headless environments and unit testing.
+- **Memory Hygiene & Zeroization Utilities** (`src/libraries/secureMemory.ts`): Explicit buffer clearing
+  (`zeroizeBytes`), scoped execution (`withSecureBytes`, `withSecureString`), and timing-safe comparison
+  (`constantTimeCompare`).
+- **KnishIOClient Secret Storage Integration**: `KnishIOClient` accepts `secretStorage` in its constructor,
+  provides `setSecretStorage()`, `getSecretStorage()`, and `retrieveSecret()`, and unwraps the master secret
+  just-in-time for molecule construction (`createMolecule()`) and auth token refresh (`executeQuery()`)
+  without permanently retaining cleartext secrets in client heap memory.
+
 ### Fixed
+
+- **Zod ClientConfig Schema Flexibility**: Updated strict Zod validation schemas in `src/validation/schemas.ts`
+  and `src/schemas/index.ts` to permit optional `secretStorage`.
 
 - **CI on Node 20, red immediately after 0.9.6 published.** `tests/unit/request-timeout.test.ts`
   used `Promise.withResolvers`, which is Node 22+. **No consumer impact:** the published tarball
@@ -381,6 +403,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/0.9.7...HEAD
+[0.9.7]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.7
 [0.9.6]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.6
 [0.9.5]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.5
 [0.9.4]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.4
