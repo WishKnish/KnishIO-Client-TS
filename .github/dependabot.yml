@@ -51,3 +51,12 @@ updates:
           - "*"
     commit-message:
       prefix: "build"
+    # graphql 17 requires Node ^22 || ^24 || ^25 || >=26. graphql is a RUNTIME dependency here
+    # and this package advertises engines.node ">=18.0.0", so adopting the major would silently
+    # break every consumer on Node 18/20 — npm does not enforce engines, so CI goes green and
+    # the breakage surfaces at the consumer instead. Taking it requires raising this SDK's own
+    # Node floor first, which is a deliberate breaking release, not a dependency bump.
+    # Minor and patch graphql updates are still proposed.
+    ignore:
+      - dependency-name: "graphql"
+        update-types: ["version-update:semver-major"]
