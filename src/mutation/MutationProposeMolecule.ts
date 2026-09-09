@@ -57,7 +57,7 @@ import type Molecule from '../core/Molecule'
  * MutationProposeMolecule - Foundation for all molecular proposals
  * Matches JavaScript SDK MutationProposeMolecule implementation exactly
  */
-export default abstract class MutationProposeMolecule extends Mutation {
+export default class MutationProposeMolecule extends Mutation {
   protected $__molecule: Molecule
   protected $__remainderWallet: any | null = null
 
@@ -141,8 +141,11 @@ export default abstract class MutationProposeMolecule extends Mutation {
   }
 
   /**
-   * Abstract method to be implemented by subclasses
-   * Fills the molecule with specific mutation data
+   * Fills the molecule with specific mutation data.
+   * Subclasses override to build domain-specific atoms.
+   * Default implementation is a no-op for pre-assembled molecules.
    */
-  abstract fillMolecule(params: any): void
+  fillMolecule(_params?: any): void {
+    // Intentionally empty for pre-assembled molecules proposed directly
+  }
 }

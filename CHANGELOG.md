@@ -15,6 +15,12 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [0.9.8] — 2026-09-09
+
+### Fixed
+
+- **createPolicy parity**: Ported reference JavaScript SDK implementation to `KnishIOClient.createPolicy()`. Previously delegated to `createMeta({ meta: null, policy })` which threw `MetaMissingException`. Now builds a dedicated policy-only R-isotope atom via `Molecule.addPolicyAtom()` with ContinuID tracking and proper signature.
+
 ## [0.9.7] — 2026-09-04
 
 ### Added
@@ -403,7 +409,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/0.9.7...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/0.9.8...HEAD
+[0.9.8]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.8
 [0.9.7]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.7
 [0.9.6]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.6
 [0.9.5]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.5

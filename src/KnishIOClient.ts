@@ -2195,7 +2195,7 @@ export default class KnishIOClient {
   async createPolicy({
     metaType,
     metaId,
-    policy = null
+    policy = {}
   }: {
     metaType: MetaType | string
     metaId: MetaId | string
@@ -2203,13 +2203,30 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createPolicy() - Creating policy for ${metaType}:${metaId}...`)
 
-    // Policies are created via createMeta with policy parameter
-    return this.createMeta({
+    const molecule = await this.createMolecule({})
+    molecule.addPolicyAtom({
       metaType,
       metaId,
-      meta: null,
-      policy
+      meta: {},
+      policy: policy || {}
     })
+    molecule.addContinuIdAtom()
+    molecule.sign({
+      bundle: this.getBundle()
+    })
+    molecule.check()
+
+    const query = await this.createMoleculeMutation({
+      mutationClass: MutationProposeMolecule,
+      molecule
+    })
+    const response = await this.executeQuery(query)
+
+    if (!response) {
+      throw new CodeException('Policy creation failed')
+    }
+
+    return response
   }
 
   /**
