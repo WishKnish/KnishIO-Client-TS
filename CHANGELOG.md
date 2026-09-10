@@ -43,6 +43,12 @@ detail, the entry says so instead of guessing.
   `768` step-back); `KnishIOClient.setMlKemParameterSet()` validates it.
 - Encapsulation is strict and **throws** on a wrong-length recipient key rather than silently
   downgrading to whatever the peer advertised.
+- **The supported Node floor is now 20.** `engines.node` moved from `>=18.0.0` to `>=20.0.0`
+  because the ML-KEM transport never worked on Node 18: `@noble/post-quantum`'s encapsulation
+  calls `@noble/hashes`' `randomBytes`, which requires `globalThis.crypto`, and that is unflagged
+  only from Node 19. Measured on Node 18, 11 of 126 tests fail with
+  `crypto.getRandomValues must be defined`. The declared floor now matches the version CI
+  exercises; 1.0.0 is the breaking release in which to correct it.
 
 ### Removed
 
