@@ -61,6 +61,9 @@ const ML_KEM_PARAMS = {
 } as const
 const DEFAULT_ML_KEM_PARAMETER_SET = 1024
 
+type MlKemParams = (typeof ML_KEM_PARAMS)[1024 | 768]
+type MlKemKeypair = { pubkey: string; privkey: Uint8Array; params: MlKemParams }
+
 /**
  * Wallet class - Identity and key management for KnishIO DLT
  * Essential implementation for transaction operations
@@ -147,7 +150,7 @@ export default class Wallet {
       // Set characters
       this.characters = this.characters || 'BASE64'
       
-      // Initialize ML-KEM768 keys (matches JavaScript SDK)
+      // Initialize ML-KEM keys (matches JavaScript SDK)
       this.initializeMLKEM()
     }
   }
@@ -425,26 +428,90 @@ export default class Wallet {
   }
 
   // =============================================================================
-  // POST-QUANTUM CRYPTOGRAPHY - ML-KEM768 INTEGRATION
+  // POST-QUANTUM CRYPTOGRAPHY - ML-KEM INTEGRATION
   // =============================================================================
 
   /**
-   * Initializes the ML-KEM key pair (matches JavaScript SDK exactly)
+   * Derive an ML-KEM keypair for an arbitrary parameter set from the wallet's key seed,
+   * without mutating the wallet. The 64-byte `d‖z` seed takes no parameter-set input — only
+   * the final `keygen` call differs — so one KnishIO wallet owns both an ML-KEM-768 and an
+   * ML-KEM-1024 identity and either can be reconstructed on demand.
+   *
+   * Returns `null` when the wallet holds no key — a secret-less wallet, which is what a molecule
+   * deserializer builds for validation context. `generateSecret(null, …)` does NOT throw, so
+   * without this the wallet would derive a plausible-looking identity from a bogus seed and fail
+   * three layers down at AES-GCM instead of at the missing key. The guard lives here rather than
+   * at each call site so a new caller cannot miss it.
+   *
+   * @param parameterSet - 1024 or 768
    */
-  initializeMLKEM(): void {
+  private deriveMlKemKeypair(parameterSet: 1024 | 768): MlKemKeypair | null {
+    const params = ML_KEM_PARAMS[parameterSet]
+    if (!params) {
+      throw new Error(`KnishIO: unsupported ML-KEM parameter set ${parameterSet}; expected 1024 or 768.`)
+    }
+    if (!this.key) {
+      return null
+    }
     // Generate a 64-byte (512-bit) seed from the Knish.IO private key
     // Use deterministic approach: generateSecret(key, 128) → 128 hex chars = 64 bytes
-    const seedHex = generateSecret(this.key!, 128)  // 128 hex chars = 64 bytes, matches JS SDK
-    
-    // Convert the hex string to a Uint8Array  
+    const seedHex = generateSecret(this.key, 128)  // 128 hex chars = 64 bytes, matches JS SDK
+
+    // Convert the hex string to a Uint8Array
     const seed = new Uint8Array(64)
     for (let i = 0; i < 64; i++) {
       seed[i] = parseInt(seedHex.substr(i * 2, 2), 16)
     }
-    
-    const { publicKey, secretKey } = ML_KEM_PARAMS[this.mlKemParameterSet].kem.keygen(seed)
-    this.pubkey = this.serializeKey(publicKey)
-    this.privkey = secretKey // Note: We're keeping privkey as UInt8Array for security
+
+    const { publicKey, secretKey } = params.kem.keygen(seed)
+    return {
+      pubkey: this.serializeKey(publicKey),
+      privkey: secretKey,
+      params
+    }
+  }
+
+  /**
+   * ML-KEM parameter set implied by a serialized public key's raw byte length. FIPS 203's key
+   * lengths are disjoint (1568 bytes → ML-KEM-1024, 1184 bytes → ML-KEM-768), so a stored peer
+   * key recovers the parameter set of the session it belongs to without a wire-format change.
+   * Used by AuthToken.restore to resolve a snapshot that predates the field.
+   *
+   * @param pubkey - Base64-serialized ML-KEM public key
+   * @return 1024, 768, or null when the length matches neither
+   */
+  static mlKemParameterSetFromPubkey(pubkey: string | null | undefined): 1024 | 768 | null {
+    if (!pubkey) {
+      return null
+    }
+    let byteLength: number
+    try {
+      byteLength = typeof Buffer !== 'undefined'
+        ? Buffer.from(pubkey, 'base64').length
+        : atob(pubkey).length
+    } catch {
+      return null
+    }
+    if (byteLength === ML_KEM_PARAMS[1024].pkBytes) {
+      return 1024
+    }
+    if (byteLength === ML_KEM_PARAMS[768].pkBytes) {
+      return 768
+    }
+    return null
+  }
+
+  /**
+   * Initializes the ML-KEM key pair (matches JavaScript SDK exactly). Only ever reached from the
+   * constructor's `secret` branch, so the derivation cannot come back empty here.
+   */
+  initializeMLKEM(): void {
+    const derived = this.deriveMlKemKeypair(this.mlKemParameterSet)
+    if (!derived) {
+      return
+    }
+    this.pubkey = derived.pubkey
+    this.privkey = derived.privkey // Note: We're keeping privkey as UInt8Array for security
   }
 
 
@@ -456,10 +523,11 @@ export default class Wallet {
     const messageString = JSON.stringify(message)
     const messageUint8 = new TextEncoder().encode(messageString)
     const deserializedPubkey = this.deserializeKey(recipientPubkey)
-    // ML-KEM-768 public keys are exactly 1184 bytes. A wrong-length key here almost always means the
-    // node did not advertise an ML-KEM public key in its auth `key` field (e.g. a validator predating
-    // the PQ-transport build). Fail with an actionable message rather than @noble's cryptic
-    // `"publicKey" expected Uint8Array of length 1184, got length=N` assertion.
+    // ML-KEM public keys are exactly the configured parameter set's length — 1568 bytes for
+    // ML-KEM-1024, 1184 bytes for ML-KEM-768. A wrong-length key here almost always means the
+    // node did not advertise an ML-KEM public key in its auth `key` field (e.g. a validator
+    // predating the PQ-transport build). Fail with an actionable message rather than @noble's
+    // cryptic `"publicKey" expected Uint8Array of length N, got length=M` assertion.
     const params = ML_KEM_PARAMS[this.mlKemParameterSet]
     if (deserializedPubkey.length !== params.pkBytes) {
       throw new Error(
@@ -482,24 +550,46 @@ export default class Wallet {
   }
 
   /**
-   * ML-KEM768 decapsulate + AES-256-GCM decrypt → the RAW decrypted UTF-8 string (no JSON.parse).
+   * ML-KEM decapsulate + AES-256-GCM decrypt → the RAW decrypted UTF-8 string (no JSON.parse).
    * Shared by {@link decryptMessage} (which JSON.parses the result) and the PQ CipherHash transport
-   * ({@link decryptMyMessageML768}, which needs the raw response JSON text). PQ-transport Phase E.
+   * ({@link decryptMyMessageML}, which needs the raw response JSON text). PQ-transport Phase E.
    */
   async _mlkemDecryptToString(encryptedData: { cipherText: string; encryptedMessage: string }): Promise<string | null> {
     const { cipherText, encryptedMessage } = encryptedData
-    const params = ML_KEM_PARAMS[this.mlKemParameterSet]
+    const configuredParams = ML_KEM_PARAMS[this.mlKemParameterSet]
+    const otherSet: 1024 | 768 = this.mlKemParameterSet === 1024 ? 768 : 1024
     const deserializedCipherText = this.deserializeKey(cipherText)
-    if (deserializedCipherText.length !== params.ctBytes) {
-      console.error(
-        `Wallet::decryptMessage() - Ciphertext length mismatch: got ${deserializedCipherText.length}, expected ${params.ctBytes}`
-      )
-      return null
+
+    // Inbound is PERMISSIVE: a ciphertext at either parameter set decrypts, provided it is addressed
+    // to one of THIS wallet's own ML-KEM identities. The 64-byte seed is parameter-set-independent,
+    // so the other identity is derived on demand and its private key is released with this call's
+    // scope — never cached on the wallet. Outbound encapsulation stays STRICT (see encryptMessage);
+    // reading a 768 record we own downgrades nothing, but encapsulating at 768 would.
+    let params: MlKemParams = configuredParams
+    let decapsPrivkey: Uint8Array = this.privkey
+    if (deserializedCipherText.length !== configuredParams.ctBytes) {
+      if (deserializedCipherText.length !== ML_KEM_PARAMS[otherSet].ctBytes) {
+        console.error(
+          `Wallet::decryptMessage() - Ciphertext length mismatch: got ${deserializedCipherText.length}, expected ${configuredParams.ctBytes}`
+        )
+        return null
+      }
+      // `null` here means the wallet holds no key to derive from (a secret-less validation
+      // wallet); preserve the existing failure observable rather than decapsulating with nothing.
+      const derived = this.deriveMlKemKeypair(otherSet)
+      if (!derived) {
+        console.error(
+          `Wallet::decryptMessage() - cannot derive the ML-KEM-${otherSet} identity: wallet has no key`
+        )
+        return null
+      }
+      params = derived.params
+      decapsPrivkey = derived.privkey
     }
 
     let sharedSecret
     try {
-      sharedSecret = params.kem.decapsulate(deserializedCipherText, this.privkey)
+      sharedSecret = params.kem.decapsulate(deserializedCipherText, decapsPrivkey)
     } catch (e) {
       console.error('Wallet::decryptMessage() - Decapsulation failed', e)
       console.info('Wallet::decryptMessage() - my public key', this.pubkey)
@@ -551,7 +641,7 @@ export default class Wallet {
   }
 
   /**
-   * Post-quantum (ML-KEM768) CipherHash request envelope: a stringified single-recipient map
+   * Post-quantum (ML-KEM) CipherHash request envelope: a stringified single-recipient map
    * `{ "<hashShare(recipientPubkey)>": {cipherText, encryptedMessage} }` (object-valued, via
    * {@link encryptMessage}). Matches the Rust validator's CipherHash handler. PQ-transport Phase E.
    */
@@ -564,9 +654,22 @@ export default class Wallet {
    * Decrypt a CipherHash response map addressed to THIS wallet's ML-KEM pubkey
    * (`hashShare(this.pubkey)`) → the RAW decrypted GraphQL response JSON text (NOT JSON.parsed;
    * it replaces the HTTP response body for the normal parser). `null` if no entry / decrypt fails.
+   *
+   * A pre-bump peer addressed its envelope to `hashShare(our_768_pubkey)`, which a wallet
+   * configured at ML-KEM-1024 would never find — so the other identity's share is tried too.
+   * Without this, the permissive length dispatch in {@link _mlkemDecryptToString} is
+   * unreachable on the transport path.
    */
   async decryptMyMessageML(map: Record<string, { cipherText: string; encryptedMessage: string }>): Promise<string | null> {
-    const envelope = map[this.hashShare(this.pubkey)]
+    let envelope = map[this.hashShare(this.pubkey)]
+    if (!envelope) {
+      // A secret-less wallet derives nothing, so the lookup is simply skipped.
+      const otherSet: 1024 | 768 = this.mlKemParameterSet === 1024 ? 768 : 1024
+      const other = this.deriveMlKemKeypair(otherSet)
+      if (other) {
+        envelope = map[this.hashShare(other.pubkey)]
+      }
+    }
     if (!envelope) {
       return null
     }

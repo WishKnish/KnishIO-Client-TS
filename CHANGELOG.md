@@ -15,6 +15,59 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-10
+
+### Added
+
+- A wallet now decrypts records addressed to **its own ML-KEM-768 identity even when configured at
+  ML-KEM-1024**, by deriving that identity on demand from the same 64-byte wallet seed. The seed is
+  parameter-set-independent, so both identities belong to one wallet; only the final `keygen` call
+  differs. Reading pre-bump 768 records therefore needs no configuration change and no second wallet.
+- `Wallet.decryptMyMessageML()` tries both identities' `CipherHash` map keys, so a `CipherHash`
+  envelope a pre-bump peer addressed to `hashShare(our_768_pubkey)` is found rather than missed.
+- `Wallet.mlKemParameterSetFromPubkey()` recovers a parameter set from a serialized public key's
+  length (FIPS 203's 1568/1184 lengths are disjoint).
+- An exported `AuthTokenSnapshot` type, now the single declared shape of a persisted session and
+  shared by `AuthToken.restore()` and `AuthToken.toSnapshot()`, so a field cannot be written by one
+  side and dropped by the other.
+
+  Encapsulation and the advertised public key are unchanged and remain single-set: inbound is
+  permissive, outbound is strict. Reading a 768 record you own downgrades nothing — its
+  confidentiality was fixed at 768 by the sender — whereas permissive outbound would be a real
+  downgrade vector.
+
+### Changed
+
+- **ML-KEM-1024 is the default parameter set** for the post-quantum transport, replacing
+  ML-KEM-768. `Wallet` and `KnishIOClient` accept an `mlKemParameterSet` option (`1024` default,
+  `768` step-back); `KnishIOClient.setMlKemParameterSet()` validates it.
+- Encapsulation is strict and **throws** on a wrong-length recipient key rather than silently
+  downgrading to whatever the peer advertised.
+
+### Removed
+
+- `Wallet.encryptStringML768()` and `Wallet.decryptMyMessageML768()`. Use `encryptStringML()` and
+  `decryptMyMessageML()`. No aliases are retained.
+
+### Fixed
+
+- The auth-token session snapshot now records the wallet's ML-KEM parameter set, and `restore()`
+  honours it. A session persisted by an 0.9.x build restores as ML-KEM-768 instead of silently
+  becoming ML-KEM-1024 with a public key the validator never recorded for that token. Resolution is
+  three-tiered: an explicit snapshot field, then the stored validator key's length, then
+  ML-KEM-768 — never the constructor default, which is what produced the defect.
+- `SignatureAlgorithm` no longer lists `'ML-KEM768'`. ML-KEM is a key-encapsulation mechanism, not
+  a signature scheme, so the value could never be produced or verified by anything typed with it.
+
+### Notes
+
+- `0.9.9` was never published. The ML-KEM-1024 cutover is a breaking API change, so it takes the
+  1.0.0 line.
+- A frozen pre-bump ML-KEM-768 auth molecule
+  (`vectors.legacyMlkem768AuthMolecule` in `cross-platform-test-vectors.json`) is validated by this
+  SDK from a 1024-default build, so the compatibility claim rests on a signed artifact rather than
+  on parameter-set-independent hashing.
+
 ## [0.9.8] — 2026-09-09
 
 ### Fixed
@@ -409,7 +462,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/0.9.8...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.0.0
 [0.9.8]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.8
 [0.9.7]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.7
 [0.9.6]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.6

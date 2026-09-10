@@ -139,7 +139,7 @@ export interface XMSSSignature {
 }
 
 // =============================================================================
-// ML-KEM768 (Post-Quantum Key Encapsulation) TYPES
+// ML-KEM (Post-Quantum Key Encapsulation) TYPES
 // =============================================================================
 
 export interface MLKEMKeyPair {
