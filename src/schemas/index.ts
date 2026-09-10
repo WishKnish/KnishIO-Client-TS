@@ -208,7 +208,8 @@ export const KnishIOClientConfigSchema = z.object({
   serverSdkVersion: z.number().int().min(1).optional(),
   logging: z.boolean().optional(),
   defaultRequestPolicy: z.enum(['cache-first', 'cache-only', 'network-only', 'cache-and-network']).nullable().optional(),
-  secretStorage: z.unknown().optional()
+  secretStorage: z.unknown().optional(),
+  mlKemParameterSet: z.union([z.literal(1024), z.literal(768)]).optional()
 }).strict()
 
 // =============================================================================

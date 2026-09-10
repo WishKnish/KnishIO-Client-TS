@@ -516,7 +516,8 @@ async function testMLKEM768() {
         const encryptionWallet = new index_js_1.Wallet({
             secret: secret,
             token: testConfig.token,
-            position: testConfig.position
+            position: testConfig.position,
+            mlKemParameterSet: 768
         });
         logTest('Encryption wallet creation', true);
         // Get ML-KEM768 public key (non-deterministic)
@@ -715,7 +716,8 @@ async function testCrossSdkValidation() {
                     const ourWallet = new index_js_1.Wallet({
                         secret: secret,
                         token: testConfig.token,
-                        position: testConfig.position
+                        position: testConfig.position,
+                        mlKemParameterSet: 768
                     });
                     let mlkemValid = false;
                     try {

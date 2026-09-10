@@ -51,7 +51,7 @@
     "quantum-safe",
     "sdk",
     "typescript",
-    "ml-kem768",
+    "ml-kem1024",
     "cryptography",
     "crystals-kyber",
     "fips-202",

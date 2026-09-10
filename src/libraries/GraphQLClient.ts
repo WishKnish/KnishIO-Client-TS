@@ -204,7 +204,7 @@ export default class GraphQLClient implements IGraphQLClient {
     let requestInit = init
 
     if (wallet && serverPubkey && init && typeof init.body === 'string' && this.shouldEncrypt(init.body)) {
-      const hashVar = await wallet.encryptStringML768(init.body, serverPubkey)
+      const hashVar = await wallet.encryptStringML(init.body, serverPubkey)
       requestInit = { ...init, body: JSON.stringify({ query: CIPHER_HASH_QUERY, variables: { Hash: hashVar } }) }
       encryptedRequest = true
     }
@@ -228,7 +228,7 @@ export default class GraphQLClient implements IGraphQLClient {
       // Plaintext (e.g. a validator-side error response) — pass through unchanged.
       return new Response(text, init2)
     }
-    const decrypted = await wallet!.decryptMyMessageML768(JSON.parse(hash))
+    const decrypted = await wallet!.decryptMyMessageML(JSON.parse(hash))
     return new Response(decrypted != null ? decrypted : text, init2)
   }
 

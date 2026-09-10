@@ -58,8 +58,8 @@ import type { WalletAddress, BundleHash, Position, TokenSlug } from './index'
 // =============================================================================
 
 export type HashAlgorithm = 'SHAKE256' | 'SHA3-256' | 'BLAKE2B'
-export type SignatureAlgorithm = 'XMSS' | 'ML-KEM768' | 'SPHINCS+'
-export type EncryptionAlgorithm = 'ML-KEM768' | 'Kyber768' | 'ChaCha20Poly1305'
+export type SignatureAlgorithm = 'XMSS' | 'SPHINCS+'
+export type EncryptionAlgorithm = 'ML-KEM-1024' | 'ML-KEM-768'
 
 // =============================================================================
 // SHAKE256 SPECIFIC TYPES
@@ -145,7 +145,7 @@ export interface XMSSSignature {
 export interface MLKEMKeyPair {
   privateKey: Uint8Array
   publicKey: Uint8Array
-  algorithm: 'ML-KEM768'
+  algorithm: EncryptionAlgorithm
 }
 
 export interface MLKEMEncapsulationResult {
@@ -475,6 +475,11 @@ export const CRYPTO_CONSTANTS = {
   ML_KEM768_PRIVATE_KEY_SIZE: 2400,
   ML_KEM768_CIPHERTEXT_SIZE: 1088,
   ML_KEM768_SHARED_SECRET_SIZE: 32,
+
+  ML_KEM1024_PUBLIC_KEY_SIZE: 1568,
+  ML_KEM1024_PRIVATE_KEY_SIZE: 3168,
+  ML_KEM1024_CIPHERTEXT_SIZE: 1568,
+  ML_KEM1024_SHARED_SECRET_SIZE: 32,
   
   KEY_FRAGMENT_SIZE: 128,
   OTS_FRAGMENT_COUNT: 16,

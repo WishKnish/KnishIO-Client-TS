@@ -582,7 +582,8 @@ async function testMLKEM768(): Promise<boolean> {
     const encryptionWallet = new Wallet({
       secret: secret,
       token: testConfig.token,
-      position: testConfig.position
+      position: testConfig.position,
+      mlKemParameterSet: 768
     });
 
     logTest('Encryption wallet creation', true);

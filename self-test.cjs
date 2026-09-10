@@ -1027,7 +1027,8 @@ async function testMLKEM768() {
     const encryptionWallet = new Wallet({
       secret: secret,
       token: testConfig.token,
-      position: testConfig.position
+      position: testConfig.position,
+      mlKemParameterSet: 768
     });
 
     logTest('Encryption wallet creation', true);
@@ -1296,7 +1297,8 @@ async function testCrossSdkValidation() {
           const ourWallet = new Wallet({
             secret: secret,
             token: testConfig.token,
-            position: testConfig.position
+            position: testConfig.position,
+            mlKemParameterSet: 768
           });
 
           let mlkemValid = false;

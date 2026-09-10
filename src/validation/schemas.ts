@@ -231,7 +231,8 @@ export const KnishIOClientConfigSchema = z.object({
   // isn't rejected.
   defaultRequestPolicy: z.enum(['cache-first', 'cache-only', 'network-only', 'cache-and-network']).nullable().optional(),
   // Pluggable hardware envelope encryption secret storage provider
-  secretStorage: z.unknown().optional()
+  secretStorage: z.unknown().optional(),
+  mlKemParameterSet: z.union([z.literal(1024), z.literal(768)]).optional()
 }).strict()
 
 // Environment configuration with validation.

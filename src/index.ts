@@ -402,7 +402,7 @@ export const SDK_INFO = {
   description: 'TypeScript SDK for Knish.IO post-blockchain distributed ledger',
   compatibleServerVersions: COMPATIBLE_SERVER_VERSIONS,
   features: [
-    'Post-quantum cryptography (XMSS, ML-KEM768)',
+    'Post-quantum cryptography (XMSS, ML-KEM-1024)',
     'Cross-platform compatibility',
     'Type-safe APIs',
     'DAG-based transaction processing',

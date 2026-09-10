@@ -52,8 +52,14 @@ import { generateBundleHash, generateSecret, shake256, generateBatchId } from '@
 import WalletCredentialException from '@/exception/WalletCredentialException'
 import { isBundleHash } from '@/types'
 import TokenUnit from '@/core/TokenUnit'
-// Post-quantum cryptography for ML-KEM768 key encapsulation
-import { ml_kem768 } from '@noble/post-quantum/ml-kem.js'
+// Post-quantum cryptography for ML-KEM key encapsulation
+import { ml_kem768, ml_kem1024 } from '@noble/post-quantum/ml-kem.js'
+
+const ML_KEM_PARAMS = {
+  1024: { kem: ml_kem1024, pkBytes: 1568, skBytes: 3168, ctBytes: 1568 },
+  768: { kem: ml_kem768, pkBytes: 1184, skBytes: 2400, ctBytes: 1088 }
+} as const
+const DEFAULT_ML_KEM_PARAMETER_SET = 1024
 
 /**
  * Wallet class - Identity and key management for KnishIO DLT
@@ -73,6 +79,7 @@ export default class Wallet {
   public tokenUnits: any[]
   public tradeRates: Record<string, any>
   public molecules: Record<string, any>
+  public mlKemParameterSet: 1024 | 768
 
   // Token metadata (populated from query responses)
   public tokenName?: string
@@ -88,7 +95,8 @@ export default class Wallet {
     address = null,
     position = null,
     batchId = null,
-    characters = null
+    characters = null,
+    mlKemParameterSet = DEFAULT_ML_KEM_PARAMETER_SET
   }: {
     secret?: string | null
     bundle?: string | null
@@ -97,7 +105,13 @@ export default class Wallet {
     position?: string | null
     batchId?: string | null
     characters?: string | null
+    mlKemParameterSet?: 1024 | 768
   } = {}) {
+    const paramSetNum = Number(mlKemParameterSet) as 1024 | 768
+    if (!ML_KEM_PARAMS[paramSetNum]) {
+      throw new Error(`KnishIO: unsupported ML-KEM parameter set ${mlKemParameterSet}; expected 1024 or 768.`)
+    }
+    this.mlKemParameterSet = paramSetNum
     this.token = token
     this.balance = '0'
     this.molecules = {}
@@ -147,13 +161,15 @@ export default class Wallet {
     bundle = null,
     token = 'USER',
     batchId = null,
-    characters = null
+    characters = null,
+    mlKemParameterSet = DEFAULT_ML_KEM_PARAMETER_SET
   }: {
     secret?: string | null
     bundle?: string | null
     token?: string
     batchId?: string | null
     characters?: string | null
+    mlKemParameterSet?: 1024 | 768
   }): Wallet {
     let position: string | null = null
 
@@ -176,7 +192,8 @@ export default class Wallet {
       token,
       position,
       batchId,
-      characters
+      characters,
+      mlKemParameterSet
     })
   }
 
@@ -425,7 +442,7 @@ export default class Wallet {
       seed[i] = parseInt(seedHex.substr(i * 2, 2), 16)
     }
     
-    const { publicKey, secretKey } = ml_kem768.keygen(seed)
+    const { publicKey, secretKey } = ML_KEM_PARAMS[this.mlKemParameterSet].kem.keygen(seed)
     this.pubkey = this.serializeKey(publicKey)
     this.privkey = secretKey // Note: We're keeping privkey as UInt8Array for security
   }
@@ -443,15 +460,15 @@ export default class Wallet {
     // node did not advertise an ML-KEM public key in its auth `key` field (e.g. a validator predating
     // the PQ-transport build). Fail with an actionable message rather than @noble's cryptic
     // `"publicKey" expected Uint8Array of length 1184, got length=N` assertion.
-    const ML_KEM_768_PUBLIC_KEY_BYTES = 1184
-    if (deserializedPubkey.length !== ML_KEM_768_PUBLIC_KEY_BYTES) {
+    const params = ML_KEM_PARAMS[this.mlKemParameterSet]
+    if (deserializedPubkey.length !== params.pkBytes) {
       throw new Error(
         `KnishIO: cannot ML-KEM-encrypt — recipient public key is ${deserializedPubkey.length} bytes, ` +
-        `expected ${ML_KEM_768_PUBLIC_KEY_BYTES} (ML-KEM-768). The node likely did not advertise an ML-KEM ` +
-        `public key (upgrade the validator to a PQ-transport build), or authenticate with { encrypt: false }.`
+        `expected ${params.pkBytes} (ML-KEM-${this.mlKemParameterSet}). The peer is not running ML-KEM-${this.mlKemParameterSet}; ` +
+        'upgrade the peer, or step this client back to the other parameter set.'
       )
     }
-    const { cipherText, sharedSecret } = ml_kem768.encapsulate(deserializedPubkey)
+    const { cipherText, sharedSecret } = params.kem.encapsulate(deserializedPubkey)
     const encryptedMessage = await this.encryptWithSharedSecret(messageUint8, sharedSecret)
     return {
       cipherText: this.serializeKey(cipherText),
@@ -471,9 +488,18 @@ export default class Wallet {
    */
   async _mlkemDecryptToString(encryptedData: { cipherText: string; encryptedMessage: string }): Promise<string | null> {
     const { cipherText, encryptedMessage } = encryptedData
+    const params = ML_KEM_PARAMS[this.mlKemParameterSet]
+    const deserializedCipherText = this.deserializeKey(cipherText)
+    if (deserializedCipherText.length !== params.ctBytes) {
+      console.error(
+        `Wallet::decryptMessage() - Ciphertext length mismatch: got ${deserializedCipherText.length}, expected ${params.ctBytes}`
+      )
+      return null
+    }
+
     let sharedSecret
     try {
-      sharedSecret = ml_kem768.decapsulate(this.deserializeKey(cipherText), this.privkey)
+      sharedSecret = params.kem.decapsulate(deserializedCipherText, this.privkey)
     } catch (e) {
       console.error('Wallet::decryptMessage() - Decapsulation failed', e)
       console.info('Wallet::decryptMessage() - my public key', this.pubkey)
@@ -529,7 +555,7 @@ export default class Wallet {
    * `{ "<hashShare(recipientPubkey)>": {cipherText, encryptedMessage} }` (object-valued, via
    * {@link encryptMessage}). Matches the Rust validator's CipherHash handler. PQ-transport Phase E.
    */
-  async encryptStringML768(message: any, recipientPubkey: string): Promise<string> {
+  async encryptStringML(message: any, recipientPubkey: string): Promise<string> {
     const envelope = await this.encryptMessage(message, recipientPubkey)
     return JSON.stringify({ [this.hashShare(recipientPubkey)]: envelope })
   }
@@ -539,7 +565,7 @@ export default class Wallet {
    * (`hashShare(this.pubkey)`) → the RAW decrypted GraphQL response JSON text (NOT JSON.parsed;
    * it replaces the HTTP response body for the normal parser). `null` if no entry / decrypt fails.
    */
-  async decryptMyMessageML768(map: Record<string, { cipherText: string; encryptedMessage: string }>): Promise<string | null> {
+  async decryptMyMessageML(map: Record<string, { cipherText: string; encryptedMessage: string }>): Promise<string | null> {
     const envelope = map[this.hashShare(this.pubkey)]
     if (!envelope) {
       return null

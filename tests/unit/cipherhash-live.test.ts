@@ -27,7 +27,8 @@ describe.skipIf(!runCipherHash)('CipherHash live ML-KEM round-trip (PQ Phase E)'
     // vary ONLY the transport on this SAME session — the queried balance wallet stays fixed. (A
     // fresh second auth would rotate the USER remainder via ContinuID → a different address/
     // position/pubkey, which is correct protocol behaviour, not a transport bug.)
-    const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false })
+    const mlKemParameterSet = process.env.CIPHERHASH_MLKEM_PARAMETER_SET ? (Number(process.env.CIPHERHASH_MLKEM_PARAMETER_SET) as 768 | 1024) : 1024
+    const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false, mlKemParameterSet })
     await client.requestAuthToken({ secret, encrypt: true })
 
     // Encrypted round-trip: the validator ML-KEM-decrypts the request, executes it, and encrypts

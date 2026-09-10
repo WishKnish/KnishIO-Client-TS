@@ -166,6 +166,7 @@ export default class KnishIOClient {
   private $__authTokenObjects: Record<string, AuthToken | null> = {}
   private $__authToken: AuthToken | null = null
   private $__authInProcess: boolean = false
+  private $__mlKemParameterSet: 1024 | 768 = 1024
   private $__remainderWallet: Wallet | null = null
   private lastMoleculeQuery: Mutation | null = null
   private abortControllers: Map<string, AbortController> = new Map()
@@ -189,6 +190,7 @@ export default class KnishIOClient {
     logging?: boolean
     defaultRequestPolicy?: RequestPolicy | null
     secretStorage?: ISecretStorageProvider | null
+    mlKemParameterSet?: 1024 | 768
   }) {
     // Phase 2 Enhancement: Use standardized configuration validation
     const standardValidationResult = ConfigValidator.validateClientConfig(config)
@@ -238,7 +240,8 @@ export default class KnishIOClient {
       client: client as GraphQLClient | null,
       serverSdkVersion,
       logging,
-      defaultRequestPolicy
+      defaultRequestPolicy,
+      mlKemParameterSet: config.mlKemParameterSet ?? 1024
     })
 
     if (config.secretStorage) {
@@ -256,7 +259,8 @@ export default class KnishIOClient {
     client = null,
     serverSdkVersion = 3,
     logging = false,
-    defaultRequestPolicy = null
+    defaultRequestPolicy = null,
+    mlKemParameterSet = 1024
   }: {
     uri: string | string[]
     cellSlug?: string | null
@@ -265,10 +269,12 @@ export default class KnishIOClient {
     serverSdkVersion?: number
     logging?: boolean
     defaultRequestPolicy?: RequestPolicy | null
+    mlKemParameterSet?: 1024 | 768
   }): void {
     this.reset()
 
     this.$__logging = logging
+    this.setMlKemParameterSet(mlKemParameterSet)
     this.$__authTokenObjects = {}
 
     this.setUri(uri)
@@ -297,6 +303,19 @@ export default class KnishIOClient {
     // serverSdkVersion. A re-initialize updates it.
     this.$__defaultRequestPolicy = defaultRequestPolicy
   }
+  getMlKemParameterSet(): 1024 | 768 {
+    return this.$__mlKemParameterSet || 1024
+  }
+
+  setMlKemParameterSet(parameterSet: 1024 | 768): this {
+    const paramNum = Number(parameterSet) as 1024 | 768
+    if (![1024, 768].includes(paramNum)) {
+      throw new Error(`KnishIO: unsupported ML-KEM parameter set ${parameterSet}; expected 1024 or 768.`)
+    }
+    this.$__mlKemParameterSet = paramNum
+    return this
+  }
+
 
   /**
    * Get random uri from specified this.$__uris
@@ -589,7 +608,8 @@ export default class KnishIOClient {
       bundle,
       token: 'USER',
       batchId: sourceWallet!.batchId,
-      characters: sourceWallet!.characters
+      characters: sourceWallet!.characters,
+      mlKemParameterSet: this.getMlKemParameterSet()
     }))
 
     return new Molecule({
@@ -599,7 +619,8 @@ export default class KnishIOClient {
       remainderWallet: this.getRemainderWallet()!,
       cellSlug: this.getCellSlug(),
       version: this.getServerSdkVersion(),
-      continuIdPosition
+      continuIdPosition,
+      mlKemParameterSet: this.getMlKemParameterSet()
     })
   }
 
@@ -756,7 +777,8 @@ export default class KnishIOClient {
 
     if (!sourceWallet) {
       sourceWallet = new Wallet({
-        secret: this.getSecret()
+        secret: this.getSecret(),
+        mlKemParameterSet: this.getMlKemParameterSet()
       })
     } else {
       sourceWallet.key = Wallet.generateKey({
@@ -819,7 +841,8 @@ export default class KnishIOClient {
     // Attempt to get the recipient's wallet
     const recipientWallet = Wallet.create({
       bundle: bundleHash,
-      token
+      token,
+      mlKemParameterSet: this.getMlKemParameterSet()
     })
 
     // Compute the batch ID for the recipient (typically used by stackable tokens)
@@ -909,7 +932,8 @@ export default class KnishIOClient {
     const recipientWallets: Wallet[] = recipients.map(recipient => {
       const recipientWallet = Wallet.create({
         bundle: recipient.bundleHash,
-        token
+        token,
+        mlKemParameterSet: this.getMlKemParameterSet()
       })
       if (recipient.batchId !== null && recipient.batchId !== undefined) {
         recipientWallet.batchId = recipient.batchId
@@ -1774,7 +1798,8 @@ export default class KnishIOClient {
       secret: this.getSecret(),
       bundle: this.getBundle(),
       token,
-      batchId: batchId as any
+      batchId: batchId as any,
+      mlKemParameterSet: this.getMlKemParameterSet()
     })
 
     // Initialize the create token mutation
@@ -1880,7 +1905,8 @@ export default class KnishIOClient {
     const recipientWallet = new Wallet({
       secret: this.getSecret(),
       bundle: '0000000000000000000000000000000000000000000000000000000000000000',
-      token
+      token,
+      mlKemParameterSet: this.getMlKemParameterSet()
     })
 
     await mutation.fillMolecule({
@@ -1993,7 +2019,8 @@ export default class KnishIOClient {
     const newWallet = new Wallet({
       secret: this.getSecret(),
       bundle: this.getBundle(),
-      token
+      token,
+      mlKemParameterSet: this.getMlKemParameterSet()
     })
 
     // Initialize the create wallet mutation
@@ -2499,7 +2526,8 @@ export default class KnishIOClient {
     // Generate a signing wallet with AUTH token (matching JavaScript SDK)
     const wallet = new Wallet({
       secret,
-      token: 'AUTH'
+      token: 'AUTH',
+      mlKemParameterSet: this.getMlKemParameterSet()
     })
 
     // Create a molecule with the AUTH wallet as source

@@ -59,7 +59,7 @@ describe('Canonical Cross-Platform ML-KEM768 Vectors', () => {
   // Keygen-from-seed is deterministic (FIPS-203) → byte-frozen pubkey, like a SHAKE vector.
   it('ML-KEM768 keygen: deterministic pubkey matches canonical', () => {
     const { secret, token, position, expectedPubkey } = mlkem.keygen
-    const wallet = new Wallet({ secret, token, position })
+    const wallet = new Wallet({ secret, token, position, mlKemParameterSet: 768 })
     expect(wallet.pubkey).toBe(expectedPubkey)
   })
 
@@ -67,6 +67,23 @@ describe('Canonical Cross-Platform ML-KEM768 Vectors', () => {
   // one frozen {cipherText, encryptedMessage} sample must decrypt to the canonical plaintext.
   it('ML-KEM768 decrypt: frozen sample decrypts to canonical plaintext', async () => {
     const { secret, token, position, cipherText, encryptedMessage, expectedPlaintext } = mlkem.decrypt
+    const wallet = new Wallet({ secret, token, position, mlKemParameterSet: 768 })
+    const plaintext = await wallet.decryptMessage({ cipherText, encryptedMessage })
+    expect(plaintext).toBe(expectedPlaintext)
+  })
+})
+
+describe('Canonical Cross-Platform ML-KEM1024 Vectors', () => {
+  const mlkem1024 = vectors.mlkem1024
+
+  it('ML-KEM1024 keygen: deterministic pubkey matches canonical (default 1024)', () => {
+    const { secret, token, position, expectedPubkey } = mlkem1024.keygen
+    const wallet = new Wallet({ secret, token, position })
+    expect(wallet.pubkey).toBe(expectedPubkey)
+  })
+
+  it('ML-KEM1024 decrypt: frozen sample decrypts to canonical plaintext', async () => {
+    const { secret, token, position, cipherText, encryptedMessage, expectedPlaintext } = mlkem1024.decrypt
     const wallet = new Wallet({ secret, token, position })
     const plaintext = await wallet.decryptMessage({ cipherText, encryptedMessage })
     expect(plaintext).toBe(expectedPlaintext)
