@@ -77,7 +77,11 @@ export interface ISecretStorageProvider {
   readonly providerType: string
 
   /**
-   * Whether this provider is backed by hardware (TPM, Secure Enclave, StrongBox)
+   * True only when this provider holds a non-exportable key inside platform-secure
+   * hardware (Android TEE/StrongBox, Secure Enclave, TPM) and learned that from the
+   * platform itself — never from a caller argument. Software envelope providers
+   * return false. The value is persisted as `metadata.hardwareBacked` in every
+   * envelope this provider writes.
    */
   isHardwareBacked(): boolean
 

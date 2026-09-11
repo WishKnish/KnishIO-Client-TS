@@ -61,7 +61,6 @@ export interface CreateSecretStorageOptions {
   type?: 'webcrypto' | 'memory'
   defaultPassphrase?: string
   backend?: IStorageBackend
-  hardwareBacked?: boolean
 }
 
 /**
@@ -79,7 +78,6 @@ export function createDefaultSecretStorage(
     return new WebCryptoSecretStorageProvider({
       backend: options.backend,
       defaultPassphrase: options.defaultPassphrase,
-      hardwareBacked: options.hardwareBacked
     })
   }
 
