@@ -52,6 +52,8 @@ export {
   MemoryStorageBackend,
   type IStorageBackend
 } from './WebCryptoSecretStorageProvider'
+export { default as FileStorageBackend } from './FileStorageBackend'
+export { default as WebStorageBackend } from './WebStorageBackend'
 export {
   default as WebAuthnPrfSecretStorageProvider,
   type WebAuthnPrfSecretStorageOptions,
@@ -72,7 +74,9 @@ export {
   base64ToUint8Array,
   deriveEnvelopeKey,
   ENVELOPE_ALGORITHM,
-  DEFAULT_ITERATIONS
+  DEFAULT_ITERATIONS,
+  SECRET_KEY_PREFIX,
+  RECOVERY_KEY_PREFIX
 } from './secretEnvelope'
 
 import type { ISecretStorageProvider } from '@/types/storage'

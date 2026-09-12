@@ -69,6 +69,13 @@ export interface EncryptedSecretPayload {
   iterations?: number
   metadata: SecretStorageMetadata
 }
+export interface StorageOptions {
+  label?: string
+  passphrase?: string
+  recoveryPassphrase?: string
+  allowUnrecoverable?: boolean
+}
+
 
 export interface ISecretStorageProvider {
   /**
@@ -96,7 +103,7 @@ export interface ISecretStorageProvider {
   storeSecret(
     bundleHash: string,
     secret: string,
-    options?: { label?: string; passphrase?: string }
+    options?: StorageOptions
   ): Promise<void>
 
   /**
@@ -130,4 +137,13 @@ export interface ISecretStorageProvider {
     fn: (secret: string) => Promise<T> | T,
     options?: { passphrase?: string }
   ): Promise<T>
+
+  /**
+   * Recover a secret using its recovery envelope and re-enroll it under a fresh KEK
+   */
+  recoverSecret(
+    bundleHash: string,
+    recoveryPassphrase: string,
+    options?: { label?: string }
+  ): Promise<void>
 }

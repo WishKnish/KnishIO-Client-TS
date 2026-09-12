@@ -46,9 +46,15 @@ Please visit https://github.com/WishKnish/KnishIO-Client-TS for information.
 License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 */
 
-import type { ISecretStorageProvider, SecretStorageMetadata } from '@/types/storage'
+import type {
+  ISecretStorageProvider,
+  SecretStorageMetadata,
+  EncryptedSecretPayload,
+  StorageOptions
+} from '@/types/storage'
 import SecretStorageException from '@/exception/SecretStorageException'
-import { withSecureString } from '@/libraries/secureMemory'
+import { withSecureString, zeroizeBytes } from '@/libraries/secureMemory'
+import { sealEnvelope, openEnvelope } from './secretEnvelope'
 
 interface MemorySecretEntry {
   secret: string
@@ -62,6 +68,7 @@ interface MemorySecretEntry {
 export default class MemorySecretStorageProvider implements ISecretStorageProvider {
   public readonly providerType = 'memory'
   private secrets: Map<string, MemorySecretEntry> = new Map()
+  private recoverySecrets: Map<string, string> = new Map()
 
   /**
    * Memory storage is not hardware backed
@@ -83,7 +90,7 @@ export default class MemorySecretStorageProvider implements ISecretStorageProvid
   async storeSecret(
     bundleHash: string,
     secret: string,
-    options?: { label?: string; passphrase?: string }
+    options?: StorageOptions
   ): Promise<void> {
     if (!bundleHash) {
       throw new SecretStorageException('Bundle hash cannot be empty')
@@ -101,6 +108,18 @@ export default class MemorySecretStorageProvider implements ISecretStorageProvid
     }
 
     this.secrets.set(bundleHash, { secret, metadata })
+
+    if (options?.recoveryPassphrase) {
+      const recoveryMetadata: SecretStorageMetadata = {
+        bundleHash,
+        label: options?.label,
+        createdAt: Date.now(),
+        hardwareBacked: false,
+        providerType: 'webcrypto-aes-gcm'
+      }
+      const recoveryPayload = await sealEnvelope(secret, options.recoveryPassphrase, recoveryMetadata)
+      this.recoverySecrets.set(bundleHash, JSON.stringify(recoveryPayload))
+    }
   }
 
   /**
@@ -115,6 +134,7 @@ export default class MemorySecretStorageProvider implements ISecretStorageProvid
    * Delete a stored secret
    */
   async deleteSecret(bundleHash: string): Promise<boolean> {
+    this.recoverySecrets.delete(bundleHash)
     return this.secrets.delete(bundleHash)
   }
 
@@ -152,5 +172,57 @@ export default class MemorySecretStorageProvider implements ISecretStorageProvid
    */
   clear(): void {
     this.secrets.clear()
+    this.recoverySecrets.clear()
+  }
+
+  /**
+   * Recover a secret using its recovery envelope and restore it
+   */
+  async recoverSecret(
+    bundleHash: string,
+    recoveryPassphrase: string,
+    options?: { label?: string }
+  ): Promise<void> {
+    if (!bundleHash) {
+      throw new SecretStorageException('Bundle hash cannot be empty')
+    }
+    if (!recoveryPassphrase) {
+      throw new SecretStorageException('Recovery passphrase cannot be empty')
+    }
+
+    const raw = this.recoverySecrets.get(bundleHash)
+    if (!raw) {
+      throw SecretStorageException.notFound(bundleHash)
+    }
+
+    let payload: EncryptedSecretPayload
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      throw SecretStorageException.decryptionFailed('Corrupted recovery payload format')
+    }
+
+    let decryptedBytes: Uint8Array
+    try {
+      decryptedBytes = await openEnvelope(payload, recoveryPassphrase)
+    } catch (err: unknown) {
+      if (err instanceof SecretStorageException) {
+        throw err
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      throw SecretStorageException.decryptionFailed(msg)
+    }
+
+    let secretStr: string
+    try {
+      secretStr = new TextDecoder().decode(decryptedBytes)
+    } finally {
+      zeroizeBytes(decryptedBytes)
+    }
+
+    await this.storeSecret(bundleHash, secretStr, {
+      ...options,
+      recoveryPassphrase
+    })
   }
 }

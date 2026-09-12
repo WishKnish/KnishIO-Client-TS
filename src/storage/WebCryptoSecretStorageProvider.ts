@@ -49,14 +49,18 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import type {
   ISecretStorageProvider,
   SecretStorageMetadata,
-  EncryptedSecretPayload
+  EncryptedSecretPayload,
+  StorageOptions
 } from '@/types/storage'
 import SecretStorageException from '@/exception/SecretStorageException'
 import { zeroizeBytes, withSecureBytes } from '@/libraries/secureMemory'
 import {
   sealEnvelope,
-  openEnvelope
+  openEnvelope,
+  SECRET_KEY_PREFIX,
+  RECOVERY_KEY_PREFIX
 } from './secretEnvelope'
+
 /**
  * Storage backend adapter interface (supports Memory, LocalStorage, IndexedDB, etc.)
  */
@@ -92,8 +96,7 @@ export class MemoryStorageBackend implements IStorageBackend {
 
 
 const textDecoder = new TextDecoder()
-const KEY_PREFIX = 'knishio:secret:'
-
+const KEY_PREFIX = SECRET_KEY_PREFIX
 /**
  * Software envelope-encryption secret storage provider: WebCrypto AES-256-GCM with PBKDF2-HMAC-SHA256.
  * Writes the cross-SDK envelope format; never hardware-backed.
@@ -138,7 +141,7 @@ export default class WebCryptoSecretStorageProvider implements ISecretStoragePro
   async storeSecret(
     bundleHash: string,
     secret: string,
-    options?: { label?: string; passphrase?: string }
+    options?: StorageOptions
   ): Promise<void> {
     if (!bundleHash) {
       throw new SecretStorageException('Bundle hash cannot be empty')
@@ -167,6 +170,18 @@ export default class WebCryptoSecretStorageProvider implements ISecretStoragePro
 
       const payload = await sealEnvelope(secret, passphrase, metadata)
       await this.backend.setItem(`${KEY_PREFIX}${bundleHash}`, JSON.stringify(payload))
+
+      if (options?.recoveryPassphrase) {
+        const recoveryMetadata: SecretStorageMetadata = {
+          bundleHash,
+          label: options?.label,
+          createdAt: Date.now(),
+          hardwareBacked: false,
+          providerType: 'webcrypto-aes-gcm'
+        }
+        const recoveryPayload = await sealEnvelope(secret, options.recoveryPassphrase, recoveryMetadata)
+        await this.backend.setItem(`${RECOVERY_KEY_PREFIX}${bundleHash}`, JSON.stringify(recoveryPayload))
+      }
     } catch (err: unknown) {
       if (err instanceof SecretStorageException) {
         throw err
@@ -225,7 +240,9 @@ export default class WebCryptoSecretStorageProvider implements ISecretStoragePro
    */
   async deleteSecret(bundleHash: string): Promise<boolean> {
     const key = `${KEY_PREFIX}${bundleHash}`
+    const recoveryKey = `${RECOVERY_KEY_PREFIX}${bundleHash}`
     const result = await this.backend.removeItem(key)
+    await this.backend.removeItem(recoveryKey)
     return result !== false
   }
 
@@ -242,7 +259,7 @@ export default class WebCryptoSecretStorageProvider implements ISecretStoragePro
    */
   async listSecrets(): Promise<SecretStorageMetadata[]> {
     const keys = await this.backend.keys()
-    const matchingKeys = keys.filter(k => k.startsWith(KEY_PREFIX))
+    const matchingKeys = keys.filter(k => k.startsWith(KEY_PREFIX) && !k.startsWith(RECOVERY_KEY_PREFIX))
     const results: SecretStorageMetadata[] = []
 
     for (const key of matchingKeys) {
@@ -304,5 +321,58 @@ export default class WebCryptoSecretStorageProvider implements ISecretStoragePro
       const msg = err instanceof Error ? err.message : String(err)
       throw SecretStorageException.decryptionFailed(msg)
     }
+  }
+
+  /**
+   * Recover a secret using its recovery envelope and re-enroll it
+   */
+  async recoverSecret(
+    bundleHash: string,
+    recoveryPassphrase: string,
+    options?: { label?: string; passphrase?: string }
+  ): Promise<void> {
+    if (!bundleHash) {
+      throw new SecretStorageException('Bundle hash cannot be empty')
+    }
+    if (!recoveryPassphrase) {
+      throw new SecretStorageException('Recovery passphrase cannot be empty')
+    }
+
+    const raw = await this.backend.getItem(`${RECOVERY_KEY_PREFIX}${bundleHash}`)
+    if (!raw) {
+      throw SecretStorageException.notFound(bundleHash)
+    }
+
+    let payload: EncryptedSecretPayload
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      throw SecretStorageException.decryptionFailed('Corrupted recovery payload format')
+    }
+
+    let decryptedBytes: Uint8Array
+    try {
+      decryptedBytes = await openEnvelope(payload, recoveryPassphrase)
+    } catch (err: unknown) {
+      if (err instanceof SecretStorageException) {
+        throw err
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      throw SecretStorageException.decryptionFailed(msg)
+    }
+
+    let secretStr: string
+    try {
+      secretStr = textDecoder.decode(decryptedBytes)
+    } finally {
+      zeroizeBytes(decryptedBytes)
+    }
+
+    const storePassphrase = options?.passphrase ?? this.defaultPassphrase ?? recoveryPassphrase
+    await this.storeSecret(bundleHash, secretStr, {
+      ...options,
+      passphrase: storePassphrase,
+      recoveryPassphrase
+    })
   }
 }

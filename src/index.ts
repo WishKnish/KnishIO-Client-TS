@@ -280,9 +280,13 @@ export {
   IndexedDbKeyStore,
   MemoryKeyStore,
   MemoryStorageBackend,
+  FileStorageBackend,
+  WebStorageBackend,
   createDefaultSecretStorage,
   sealEnvelope,
   openEnvelope,
+  SECRET_KEY_PREFIX,
+  RECOVERY_KEY_PREFIX,
   type IStorageBackend,
   type IKeyStore,
   type CreateSecretStorageOptions,
@@ -300,6 +304,7 @@ export {
 export type {
   SecretStorageMetadata,
   EncryptedSecretPayload,
+  StorageOptions,
   ISecretStorageProvider
 } from './types/storage'
 

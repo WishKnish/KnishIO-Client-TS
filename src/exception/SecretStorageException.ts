@@ -94,4 +94,13 @@ export default class SecretStorageException extends BaseException {
       }
     )
   }
+
+  /**
+   * Validation error for storage options or parameters
+   */
+  static validationError(message: string): SecretStorageException {
+    return new SecretStorageException(message, {
+      code: 'VALIDATION_ERROR'
+    })
+  }
 }

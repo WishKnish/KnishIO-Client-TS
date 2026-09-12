@@ -49,7 +49,8 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import type {
   ISecretStorageProvider,
   SecretStorageMetadata,
-  EncryptedSecretPayload
+  EncryptedSecretPayload,
+  StorageOptions
 } from '@/types/storage'
 import SecretStorageException from '@/exception/SecretStorageException'
 import { zeroizeBytes, withSecureBytes } from '@/libraries/secureMemory'
@@ -58,12 +59,14 @@ import {
   sealEnvelope,
   openEnvelope,
   uint8ArrayToBase64,
-  base64ToUint8Array
+  base64ToUint8Array,
+  SECRET_KEY_PREFIX,
+  RECOVERY_KEY_PREFIX
 } from './secretEnvelope'
 
 export const PRF_SALT_LABEL = 'knishio:secret-storage:webauthn-prf:v1'
 export const KEK_INFO = 'knishio:secret-storage:kek:v1'
-const KEY_PREFIX = 'knishio:secret:'
+const KEY_PREFIX = SECRET_KEY_PREFIX
 const GCM_IV_LENGTH = 12
 
 const textEncoder = new TextEncoder()
@@ -252,27 +255,47 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
     const getChallenge = new Uint8Array(32)
     globalThis.crypto.getRandomValues(getChallenge)
 
-    const assertion = (await this.credentials.get({
-      publicKey: {
-        challenge: getChallenge as BufferSource,
-        rpId: this.rp.id,
-        allowCredentials: [
-          {
-            type: 'public-key',
-            id: credentialIdBytes as BufferSource
-          }
-        ],
-        userVerification: 'required',
-        extensions: {
-          prf: {
-            eval: {
-              first: prfSalt as BufferSource
+    let assertion: PublicKeyCredential | null
+    try {
+      assertion = (await this.credentials.get({
+        publicKey: {
+          challenge: getChallenge as BufferSource,
+          rpId: this.rp.id,
+          allowCredentials: [
+            {
+              type: 'public-key',
+              id: credentialIdBytes as BufferSource
+            }
+          ],
+          userVerification: 'required',
+          extensions: {
+            prf: {
+              eval: {
+                first: prfSalt as BufferSource
+              }
             }
           }
         }
+      })) as PublicKeyCredential | null
+    } catch (err: unknown) {
+      const isNotAllowed =
+        (err instanceof Error && err.name === 'NotAllowedError') ||
+        (err as { name?: string })?.name === 'NotAllowedError'
+      if (isNotAllowed) {
+        throw SecretStorageException.unavailable(
+          this.providerType,
+          'authenticator refused or credential missing'
+        )
       }
-    })) as PublicKeyCredential | null
+      throw err
+    }
 
+    if (!assertion) {
+      throw SecretStorageException.unavailable(
+        this.providerType,
+        'authenticator refused or credential missing'
+      )
+    }
     const getExtResults = assertion?.getClientExtensionResults?.()
     const firstOutput = getExtResults?.prf?.results?.first
     if (!firstOutput) {
@@ -347,27 +370,47 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
     const challenge = new Uint8Array(32)
     globalThis.crypto.getRandomValues(challenge)
 
-    const assertion = (await this.credentials.get({
-      publicKey: {
-        challenge: challenge as BufferSource,
-        rpId: this.rp.id,
-        allowCredentials: [
-          {
-            type: 'public-key',
-            id: credentialIdBytes as BufferSource
-          }
-        ],
-        userVerification: 'required',
-        extensions: {
-          prf: {
-            eval: {
-              first: prfSalt as BufferSource
+    let assertion: PublicKeyCredential | null
+    try {
+      assertion = (await this.credentials.get({
+        publicKey: {
+          challenge: challenge as BufferSource,
+          rpId: this.rp.id,
+          allowCredentials: [
+            {
+              type: 'public-key',
+              id: credentialIdBytes as BufferSource
+            }
+          ],
+          userVerification: 'required',
+          extensions: {
+            prf: {
+              eval: {
+                first: prfSalt as BufferSource
+              }
             }
           }
         }
+      })) as PublicKeyCredential | null
+    } catch (err: unknown) {
+      const isNotAllowed =
+        (err instanceof Error && err.name === 'NotAllowedError') ||
+        (err as { name?: string })?.name === 'NotAllowedError'
+      if (isNotAllowed) {
+        throw SecretStorageException.unavailable(
+          this.providerType,
+          'authenticator refused or credential missing'
+        )
       }
-    })) as PublicKeyCredential | null
+      throw err
+    }
 
+    if (!assertion) {
+      throw SecretStorageException.unavailable(
+        this.providerType,
+        'authenticator refused or credential missing'
+      )
+    }
     const extResults = assertion?.getClientExtensionResults?.()
     const firstOutput = extResults?.prf?.results?.first
     if (!firstOutput) {
@@ -414,10 +457,18 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
     this.cachedPassphrase = undefined
   }
 
+  /**
+   * Unenroll the current credential, removing the stored PRF record and clearing cached passphrase
+   */
+  async unenroll(): Promise<void> {
+    this.lock()
+    await this.backend.removeItem(this.recordKey)
+  }
+
   async storeSecret(
     bundleHash: string,
     secret: string,
-    options?: { label?: string; passphrase?: string }
+    options?: StorageOptions
   ): Promise<void> {
     if (!bundleHash) {
       throw new SecretStorageException('Bundle hash cannot be empty')
@@ -428,6 +479,12 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
     if (options?.passphrase) {
       throw new SecretStorageException(
         'WebAuthnPrfSecretStorageProvider derives its passphrase from the authenticator; options.passphrase is not accepted'
+      )
+    }
+
+    if (!options?.recoveryPassphrase && !options?.allowUnrecoverable) {
+      throw SecretStorageException.validationError(
+        'Recovery passphrase required for non-exportable hardware key unless allowUnrecoverable is true'
       )
     }
 
@@ -442,6 +499,18 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
 
     const payload: EncryptedSecretPayload = await sealEnvelope(secret, passphrase, metadata)
     await this.backend.setItem(`${KEY_PREFIX}${bundleHash}`, JSON.stringify(payload))
+
+    if (options?.recoveryPassphrase) {
+      const recoveryMetadata: SecretStorageMetadata = {
+        bundleHash,
+        label: options?.label,
+        createdAt: Date.now(),
+        hardwareBacked: false,
+        providerType: 'webcrypto-aes-gcm'
+      }
+      const recoveryPayload = await sealEnvelope(secret, options.recoveryPassphrase, recoveryMetadata)
+      await this.backend.setItem(`${RECOVERY_KEY_PREFIX}${bundleHash}`, JSON.stringify(recoveryPayload))
+    }
   }
 
   async retrieveSecret(
@@ -524,7 +593,9 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
 
   async deleteSecret(bundleHash: string): Promise<boolean> {
     const key = `${KEY_PREFIX}${bundleHash}`
+    const recoveryKey = `${RECOVERY_KEY_PREFIX}${bundleHash}`
     const result = await this.backend.removeItem(key)
+    await this.backend.removeItem(recoveryKey)
     return result !== false
   }
 
@@ -535,7 +606,7 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
 
   async listSecrets(): Promise<SecretStorageMetadata[]> {
     const keys = await this.backend.keys()
-    const matchingKeys = keys.filter(k => k.startsWith(KEY_PREFIX))
+    const matchingKeys = keys.filter(k => k.startsWith(KEY_PREFIX) && !k.startsWith(RECOVERY_KEY_PREFIX))
     const results: SecretStorageMetadata[] = []
 
     for (const key of matchingKeys) {
@@ -553,5 +624,56 @@ export default class WebAuthnPrfSecretStorageProvider implements ISecretStorageP
     }
 
     return results
+  }
+
+  /**
+   * Recover a secret using its recovery envelope and re-enroll it under a fresh WebAuthn PRF credential
+   */
+  async recoverSecret(
+    bundleHash: string,
+    recoveryPassphrase: string,
+    options?: { label?: string }
+  ): Promise<void> {
+    if (!bundleHash) {
+      throw new SecretStorageException('Bundle hash cannot be empty')
+    }
+    if (!recoveryPassphrase) {
+      throw new SecretStorageException('Recovery passphrase cannot be empty')
+    }
+
+    const raw = await this.backend.getItem(`${RECOVERY_KEY_PREFIX}${bundleHash}`)
+    if (!raw) {
+      throw SecretStorageException.notFound(bundleHash)
+    }
+
+    let payload: EncryptedSecretPayload
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      throw SecretStorageException.decryptionFailed('Corrupted recovery payload format')
+    }
+
+    let decryptedBytes: Uint8Array
+    try {
+      decryptedBytes = await openEnvelope(payload, recoveryPassphrase)
+    } catch (err: unknown) {
+      if (err instanceof SecretStorageException) {
+        throw err
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      throw SecretStorageException.decryptionFailed(msg)
+    }
+
+    let secretStr: string
+    try {
+      secretStr = textDecoder.decode(decryptedBytes)
+    } finally {
+      zeroizeBytes(decryptedBytes)
+    }
+
+    await this.storeSecret(bundleHash, secretStr, {
+      ...options,
+      recoveryPassphrase
+    })
   }
 }
