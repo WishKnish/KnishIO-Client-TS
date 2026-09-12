@@ -275,10 +275,19 @@ export {
 export {
   MemorySecretStorageProvider,
   WebCryptoSecretStorageProvider,
+  WebAuthnPrfSecretStorageProvider,
+  NonExtractableKeySecretStorageProvider,
+  IndexedDbKeyStore,
+  MemoryKeyStore,
   MemoryStorageBackend,
   createDefaultSecretStorage,
+  sealEnvelope,
+  openEnvelope,
   type IStorageBackend,
-  type CreateSecretStorageOptions
+  type IKeyStore,
+  type CreateSecretStorageOptions,
+  type WebAuthnPrfSecretStorageOptions,
+  type NonExtractableKeyStorageOptions
 } from './storage'
 
 export {

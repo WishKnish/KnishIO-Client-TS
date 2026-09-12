@@ -52,6 +52,28 @@ export {
   MemoryStorageBackend,
   type IStorageBackend
 } from './WebCryptoSecretStorageProvider'
+export {
+  default as WebAuthnPrfSecretStorageProvider,
+  type WebAuthnPrfSecretStorageOptions,
+  PRF_SALT_LABEL,
+  KEK_INFO
+} from './WebAuthnPrfSecretStorageProvider'
+export {
+  default as NonExtractableKeySecretStorageProvider,
+  type NonExtractableKeyStorageOptions,
+  type IKeyStore,
+  IndexedDbKeyStore,
+  MemoryKeyStore
+} from './NonExtractableKeySecretStorageProvider'
+export {
+  sealEnvelope,
+  openEnvelope,
+  uint8ArrayToBase64,
+  base64ToUint8Array,
+  deriveEnvelopeKey,
+  ENVELOPE_ALGORITHM,
+  DEFAULT_ITERATIONS
+} from './secretEnvelope'
 
 import type { ISecretStorageProvider } from '@/types/storage'
 import MemorySecretStorageProvider from './MemorySecretStorageProvider'
