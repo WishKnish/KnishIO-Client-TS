@@ -13,7 +13,8 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
-## [Unreleased]
+## [1.1.0] — 2026-09-12
+
 ### Added
 
 - **`FileStorageBackend`**: Node-only persistent storage backend storing key-value pairs atomically in a JSON file with restrictive 0o600 permissions, using temporary file creation and atomic rename.
@@ -25,9 +26,14 @@ detail, the entry says so instead of guessing.
 - **`WebAuthnPrfSecretStorageProvider`**: passkey PRF secret storage provider using the WebAuthn PRF (Pseudo-Random Function) extension. Wraps a random device passphrase under an HKDF-derived AES-GCM KEK bound to a resident passkey credential (authenticator-bound PRF secret with unattested hardware custody, `isHardwareBacked: false`).
 - **`NonExtractableKeySecretStorageProvider`**: secret storage provider backed by a non-extractable WebCrypto AES-GCM CryptoKey stored in `IndexedDbKeyStore` (or `MemoryKeyStore` for headless/test environments).
 - **`sealEnvelope` and `openEnvelope`**: custody-agnostic functions extracted from `WebCryptoSecretStorageProvider` for sealing and opening cross-SDK encrypted secret envelopes.
+
+### Changed
+
+- **BREAKING:** **`hardwareBacked` is no longer a caller claim.** `WebCryptoSecretStorageProvider` and `createDefaultSecretStorage()` no longer accept a `hardwareBacked` option; the software provider always reports and persists `hardwareBacked: false`. Envelopes previously written with a caller-supplied `true` were never attested and remain readable. Source-level break for callers that passed the option; the wire format (`metadata.hardwareBacked`, required boolean) is unchanged.
+- **BREAKING:** `ISecretStorageProvider` gains the required method `recoverSecret(bundleHash, recoveryPassphrase, options?)` (`src/types/storage.ts:144-148`); third-party implementations must add it.
+
 ### Fixed
 
-- **`hardwareBacked` is no longer a caller claim.** `WebCryptoSecretStorageProvider` and `createDefaultSecretStorage()` no longer accept a `hardwareBacked` option; the software provider always reports and persists `hardwareBacked: false`. Envelopes previously written with a caller-supplied `true` were never attested and remain readable. Source-level break for callers that passed the option; the wire format (`metadata.hardwareBacked`, required boolean) is unchanged.
 - **Frozen cross-SDK envelope test**: `tests/unit/secret-storage.test.ts` now decrypts the TS 0.9.7 envelope from the shared vector and asserts the emitted metadata key contract.
 
 ## [1.0.0] — 2026-09-10
@@ -483,7 +489,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.1.0
 [1.0.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.0.0
 [0.9.8]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.8
 [0.9.7]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/0.9.7
