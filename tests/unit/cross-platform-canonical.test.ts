@@ -17,7 +17,12 @@ import Molecule from '../../src/core/Molecule'
 import AuthToken from '../../src/AuthToken'
 import { generateBundleHash, shake256 } from '../../src/libraries/crypto'
 import vectorsJson from '../../../shared-test-results/cross-platform-test-vectors.json'
-import { FROZEN_TS_0_9_7_ENVELOPE } from '../fixtures/frozenEnvelope'
+import {
+  FROZEN_TS_0_9_7_ENVELOPE,
+  FROZEN_JS_1_1_0_RECOVERY_ENVELOPE,
+  XSDK_RECOVERY_PASSPHRASE,
+  XSDK_RECOVERY_PLAINTEXT
+} from '../fixtures/frozenEnvelope'
 
 type LegacyMetaJson = { key: string; value: string }
 
@@ -261,5 +266,15 @@ describe('Secret storage envelope parity with master vector', () => {
     const masterPayload = (vectorsJson as any).vectors.secret_storage_envelope.tests[0].payload
     const frozenPayload = JSON.parse(FROZEN_TS_0_9_7_ENVELOPE)
     expect(frozenPayload).toEqual(masterPayload)
+  })
+
+  it('master vector tests[1] is the frozen recovery record', () => {
+    const t = (vectorsJson as any).vectors.secret_storage_envelope.tests[1]
+    expect(t.storageKey).toBe(`knishio:recovery:${t.bundleHash}`)
+    expect(t.payload.metadata.hardwareBacked).toBe(false)
+    expect(t.recoveryPassphrase).toBe(XSDK_RECOVERY_PASSPHRASE)
+    expect(t.passphrase).toBeUndefined()
+    expect(t.payload).toEqual(JSON.parse(FROZEN_JS_1_1_0_RECOVERY_ENVELOPE))
+    expect(t.expectedPlaintext).toBe(XSDK_RECOVERY_PLAINTEXT)
   })
 })
