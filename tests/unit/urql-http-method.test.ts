@@ -19,6 +19,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import GraphQLClient from '../../src/libraries/GraphQLClient'
 import UrqlClientWrapper from '../../src/libraries/UrqlClientWrapper'
+import Wallet from '../../src/core/Wallet'
 
 const SERVER_URI = 'https://api.knish.io/graphql'
 
@@ -88,11 +89,13 @@ describe('UrqlClientWrapper sends queries as POST under urql 6', () => {
 })
 
 describe('the encrypted transport still has a body to encrypt', () => {
-  it('gives cipherFetch a JSON-parseable string body', async () => {
-    // cipherLink on. Without wallet/pubkey set, cipherFetch forwards rather than encrypting, but
-    // it still receives `init` — and `typeof init.body === 'string'` is the guard that decides
-    // whether encryption happens at all. Under a GET default this would be `undefined`.
+  it('gives cipherFetch a JSON-parseable string body it can wrap in CipherHash', async () => {
+    // cipherLink on, with transport keys — `typeof init.body === 'string'` is the guard that
+    // decides whether encryption happens at all. Under a GET default this would be `undefined`
+    // and the query would leave as plaintext URL parameters.
+    const wallet = new Wallet({ secret: 'a1b2c3d4e5f6'.repeat(8), token: 'AUTH' })
     const client = new GraphQLClient({ serverUri: SERVER_URI, encrypt: true })
+    client.setAuthData({ token: 'T', pubkey: wallet.pubkey as string, wallet })
     await client.query({ query: SHORT_QUERY, variables: {} })
 
     expect(recorded).toHaveLength(1)
@@ -100,8 +103,11 @@ describe('the encrypted transport still has a body to encrypt', () => {
 
     expect(sent.method).toBe('POST')
     expect(typeof sent.body).toBe('string')
-    expect(String(sent.body).length).toBeGreaterThan(0)
-    expect(() => JSON.parse(String(sent.body))).not.toThrow()
-    expect(JSON.parse(String(sent.body))).toHaveProperty('query')
+    const body = JSON.parse(String(sent.body))
+    // The body urql handed cipherFetch was encryptable, so what went on the wire is the
+    // CipherHash envelope — not the plaintext operation.
+    expect(body.query).toContain('CipherHash')
+    expect(typeof body.variables.Hash).toBe('string')
+    expect(String(sent.body)).not.toContain('Balance')
   })
 })

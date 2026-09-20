@@ -55,6 +55,7 @@ import {
 } from '@urql/core'
 import { createClient as createWSClient } from 'graphql-ws'
 import { pipe, subscribe } from 'wonka'
+import { CodeException } from '@/exception'
 import type {
   GraphQLClient as IGraphQLClient,
   GraphQLRequest,
@@ -200,17 +201,29 @@ export default class GraphQLClient implements IGraphQLClient {
   private async cipherFetch(input: any, init: any): Promise<Response> {
     const wallet = this.$__wallet
     const serverPubkey = this.$__pubkey
-    let encryptedRequest = false
+    // Non-null only on the encrypted path, so the response decrypt needs no assertion.
+    let cipherWallet: Wallet | null = null
     let requestInit = init
 
-    if (wallet && serverPubkey && init && typeof init.body === 'string' && this.shouldEncrypt(init.body)) {
+    // Decide the bypass FIRST, then demand the keys: a bypassed operation (`__schema`,
+    // `ContinuId`, `AccessToken`, U-isotope `ProposeMolecule`) must still go out in plaintext or
+    // the auth bootstrap would deadlock encrypting to a server pubkey it has not learned yet.
+    // Anything else on an encryption-enabled client fails closed rather than silently
+    // downgrading to plaintext (matches PHP Cipher.php / Kotlin HttpClient).
+    if (init && typeof init.body === 'string' && this.shouldEncrypt(init.body)) {
+      if (!wallet) {
+        throw new CodeException('Authorized wallet missing.')
+      }
+      if (!serverPubkey) {
+        throw new CodeException('Server public key missing.')
+      }
       const hashVar = await wallet.encryptStringML(init.body, serverPubkey)
       requestInit = { ...init, body: JSON.stringify({ query: CIPHER_HASH_QUERY, variables: { Hash: hashVar } }) }
-      encryptedRequest = true
+      cipherWallet = wallet
     }
 
     const response = await fetch(input, requestInit)
-    if (!encryptedRequest) {
+    if (!cipherWallet) {
       return response
     }
 
@@ -228,7 +241,7 @@ export default class GraphQLClient implements IGraphQLClient {
       // Plaintext (e.g. a validator-side error response) — pass through unchanged.
       return new Response(text, init2)
     }
-    const decrypted = await wallet!.decryptMyMessageML(JSON.parse(hash))
+    const decrypted = await cipherWallet.decryptMyMessageML(JSON.parse(hash))
     return new Response(decrypted != null ? decrypted : text, init2)
   }
 

@@ -22,17 +22,23 @@ describe.skipIf(!runCipherHash)('CipherHash live ML-KEM round-trip (PQ Phase E)'
   it('encrypted queryBalance round-trips (matches plaintext)', async () => {
     const secret = generateSecret()
 
-    // ONE authenticated session (encrypt=true → conveys the AUTH wallet's ML-KEM pubkey as a
-    // signed walletPubkey U-atom meta, so the validator can encrypt responses back to it). We then
-    // vary ONLY the transport on this SAME session — the queried balance wallet stays fixed. (A
-    // fresh second auth would rotate the USER remainder via ContinuID → a different address/
-    // position/pubkey, which is correct protocol behaviour, not a transport bug.)
+    // ONE session, transport toggled on it — the queried balance wallet stays fixed. (A fresh
+    // second auth would rotate the USER remainder via ContinuID → a different address/position/
+    // pubkey, which is correct protocol behaviour, not a transport bug.)
+    //
+    // The session authenticates PLAINTEXT on purpose. The AUTH wallet's ML-KEM pubkey is conveyed
+    // as a signed `walletPubkey` U-atom meta regardless of `encrypt` (KnishIOClient.ts:2546-2553),
+    // and the validator's CipherHash handler needs only that key — so an `encrypt: false` session
+    // still speaks the encrypted transport. Authenticating with `encrypt: true` instead would make
+    // the plaintext baseline leg below a silent downgrade, which the validator rejects when
+    // ENFORCE_ENCRYPTED_TRANSPORT is at its secure default.
     const mlKemParameterSet = process.env.CIPHERHASH_MLKEM_PARAMETER_SET ? (Number(process.env.CIPHERHASH_MLKEM_PARAMETER_SET) as 768 | 1024) : 1024
     const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false, mlKemParameterSet })
-    await client.requestAuthToken({ secret, encrypt: true })
+    await client.requestAuthToken({ secret, encrypt: false })
 
     // Encrypted round-trip: the validator ML-KEM-decrypts the request, executes it, and encrypts
     // the response back to the client's ML-KEM pubkey, which the client decrypts.
+    client.switchEncryption(true)
     const encResp = await client.queryBalance({ token: 'USER' })
 
     // Plaintext baseline of the SAME wallet on the SAME authed session — only the transport differs.
@@ -44,5 +50,24 @@ describe.skipIf(!runCipherHash)('CipherHash live ML-KEM round-trip (PQ Phase E)'
     // cycle-164 Kotlin @SerialName bug). toEqual is order-insensitive.
     expect(encResp.data()).not.toBeNull()
     expect(encResp.data()).toEqual(plainResp.data())
+  }, 60000)
+
+  // Live coverage of the enforcement path: extract_encrypt_flag → auth_tokens.encrypted →
+  // requires_encrypted_transport. It also proves this SDK's signed `encrypt` meta literal is the
+  // one the validator honours.
+  it('a session authenticated with encrypt: true is refused when it drops to plaintext', async () => {
+    const secret = generateSecret()
+    const mlKemParameterSet = process.env.CIPHERHASH_MLKEM_PARAMETER_SET ? (Number(process.env.CIPHERHASH_MLKEM_PARAMETER_SET) as 768 | 1024) : 1024
+    const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false, mlKemParameterSet })
+    await client.requestAuthToken({ secret, encrypt: true })
+
+    // The encrypted transport still works for this session.
+    const encResp = await client.queryBalance({ token: 'USER' })
+    expect(encResp.data()).not.toBeNull()
+
+    // Dropping to plaintext on the same session is the silent downgrade the validator refuses.
+    client.switchEncryption(false)
+    await expect(client.queryBalance({ token: 'USER' }))
+      .rejects.toThrow(/send requests through the CipherHash encrypted transport/)
   }, 60000)
 })
