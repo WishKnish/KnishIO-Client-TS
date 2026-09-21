@@ -81,7 +81,11 @@
     "vitest": "^4.1.11"
   },
   "resolutions": {
-    "wonka": "6.3.6"
+    "wonka": "6.3.6",
+    "esbuild": "^0.28.1"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   },
   "browserslist": [
     "> 1%",
