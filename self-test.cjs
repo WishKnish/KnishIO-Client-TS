@@ -984,10 +984,19 @@ async function testBufferFamily() {
         allPass = allPass && ok;
       }
     } else {
+      // Recorded as its own step so the summary lists it under "Tests Skipped" rather
+      // than folding the missing negative checks into bufferFamily's PASS.
       const mustHave = process.env.KNISHIO_REQUIRE_VECTORS === 'true';
-      log('  SKIPPED: buffer_conservation_negative vectors absent (older canonical-patent-vectors.json)', 'yellow');
+      results.tests.bufferConservationNegative = {
+        passed: false,
+        skipped: !mustHave,
+        validationError: 'buffer_conservation_negative vectors absent (older canonical-patent-vectors.json)'
+      };
       if (mustHave) {
+        log('  FAILED: buffer_conservation_negative vectors absent (KNISHIO_REQUIRE_VECTORS=true)', 'red');
         allPass = false;
+      } else {
+        log('  SKIPPED: buffer_conservation_negative vectors absent (older canonical-patent-vectors.json)', 'yellow');
       }
     }
 
@@ -1082,138 +1091,124 @@ async function testMLKEM768() {
 }
 
 /**
+ * Runs one negative case. `build` is setup only: any throw from it FAILS the case, it
+ * never counts as the expected rejection. The case passes only when check() throws
+ * `expected`; any other exception, or check() returning, fails it.
+ */
+function expectCheckRejects(label, expected, build) {
+  let molecule;
+  let checkWallet;
+  try {
+    ({ molecule, checkWallet } = build());
+  } catch (error) {
+    logTest(label, false, `setup failed before check() ran: ${error.name}: ${error.message}`);
+    return false;
+  }
+
+  let outcome;
+  try {
+    outcome = `returned ${molecule.check(checkWallet)}`;
+  } catch (error) {
+    // The dist bundle exports some exception classes; match those by class, the rest
+    // (not exported) by name.
+    const matches = typeof SDK[expected] === 'function'
+      ? error instanceof SDK[expected]
+      : error.name === expected;
+    if (matches) {
+      logTest(label, true);
+      return true;
+    }
+    outcome = `threw ${error.name}: ${error.message}`;
+  }
+  logTest(label, false, `expected check() to throw ${expected}; it ${outcome}`);
+  return false;
+}
+
+/**
  * Negative Test Cases (Anti-Cheating)
- * Validates that invalid molecules properly fail validation
+ * Each molecule is a valid transfer except for the one defect under test, and must be
+ * rejected by check() with that defect's own exception.
  */
 async function testNegativeCases() {
   log('\n6. Negative Test Cases (Anti-Cheating)', 'blue');
 
   const testConfig = config.tests.crypto;
-  let allNegativeTestsPassed = true;
+  const secret = generateSecret(testConfig.seed);
+  const bundle = generateBundleHash(secret);
+  const recipientSecret = generateSecret('NEGATIVE-CASE-RECIPIENT');
 
-  try {
-    const secret = generateSecret(testConfig.seed);
-    const bundle = generateBundleHash(secret);
-
+  // A balanced two-atom V transfer from a fresh source wallet (balance 1000).
+  const buildTransfer = (debit, credit) => {
     const sourceWallet = new Wallet({
       secret: secret,
       token: 'TEST',
       position: '0123456789abcdeffedcba9876543210fedcba9876543210fedcba9876543210'
     });
     sourceWallet.balance = 1000;
+    const recipientWallet = new Wallet({ secret: recipientSecret, token: 'TEST' });
 
-    // Test 1: Missing Molecular Hash (should fail)
-    try {
-      const invalidMolecule = new Molecule({
-        secret: secret,
-        bundle: bundle,
-        sourceWallet: sourceWallet
-      });
+    const molecule = new Molecule({ secret, bundle, sourceWallet });
+    molecule.addAtom(Atom.create({ isotope: 'V', wallet: sourceWallet, value: debit }));
+    molecule.addAtom(Atom.create({ isotope: 'V', wallet: recipientWallet, value: credit }));
+    return { molecule, checkWallet: sourceWallet };
+  };
 
-      // Add a valid atom but don't sign (no molecular hash)
-      invalidMolecule.addAtom(new Atom({
-        isotope: 'V',
-        wallet: sourceWallet,
-        value: -100
-      }));
-
-      // This should fail because there's no molecular hash
-      const shouldFail = invalidMolecule.check(sourceWallet);
-      if (shouldFail) {
-        logTest('Missing molecular hash validation (should FAIL)', false, 'Invalid molecule passed validation');
-        allNegativeTestsPassed = false;
-      } else {
-        logTest('Missing molecular hash validation (should FAIL)', true);
+  const outcomes = [
+    // Test 1: Missing Molecular Hash — never signed, so molecularHash stays null.
+    expectCheckRejects('Missing molecular hash validation (should FAIL)', 'MolecularHashMissingException', () => {
+      const built = buildTransfer(-1000, 1000);
+      if (built.molecule.molecularHash !== null) {
+        throw new Error(`unsigned molecule already has a molecular hash (${built.molecule.molecularHash})`);
       }
-    } catch (error) {
-      // Exception is expected for missing molecular hash
-      logTest('Missing molecular hash validation (should FAIL)', true);
-    }
+      return built;
+    }),
 
-    // Test 2: Invalid Molecular Hash (should fail)
-    try {
-      const invalidMolecule = new Molecule({
-        secret: secret,
-        bundle: bundle,
-        sourceWallet: sourceWallet
-      });
-
-      invalidMolecule.addAtom(new Atom({
-        isotope: 'V',
-        wallet: sourceWallet,
-        value: -100
-      }));
-
-      // Sign normally
-      invalidMolecule.sign({});
-
-      // Then corrupt the molecular hash
-      invalidMolecule.molecularHash = 'invalid_hash_that_should_fail_validation_check_12345678';
-
-      const shouldFail = invalidMolecule.check(sourceWallet);
-      if (shouldFail) {
-        logTest('Invalid molecular hash validation (should FAIL)', false, 'Corrupted molecule passed validation');
-        allNegativeTestsPassed = false;
-      } else {
-        logTest('Invalid molecular hash validation (should FAIL)', true);
+    // Test 2: Invalid Molecular Hash — signed and verified clean, then the hash replaced.
+    expectCheckRejects('Invalid molecular hash validation (should FAIL)', 'MolecularHashMismatchException', () => {
+      const built = buildTransfer(-1000, 1000);
+      built.molecule.sign({});
+      // Control: without the corruption this molecule must pass, so the rejection below
+      // can only come from the replaced hash.
+      if (built.molecule.check(built.checkWallet) !== true) {
+        throw new Error('the uncorrupted molecule did not pass check()');
       }
-    } catch (error) {
-      // Exception is expected for invalid molecular hash
-      logTest('Invalid molecular hash validation (should FAIL)', true);
-    }
+      built.molecule.molecularHash = 'invalid_hash_that_should_fail_validation_check_12345678';
+      return built;
+    }),
 
-    // Test 3: Unbalanced Transfer (should fail)
-    try {
-      const invalidMolecule = new Molecule({
-        secret: secret,
-        bundle: bundle,
-        sourceWallet: sourceWallet
-      });
+    // Test 3: Unbalanced Transfer — debits 1000, credits only 500, correctly signed.
+    expectCheckRejects('Unbalanced transfer validation (should FAIL)', 'TransferUnbalancedException', () => {
+      const built = buildTransfer(-1000, 500);
+      built.molecule.sign({});
+      return built;
+    })
+  ];
 
-      // Create unbalanced atoms (doesn't sum to zero)
-      invalidMolecule.addAtom(new Atom({
-        isotope: 'V',
-        wallet: sourceWallet,
-        value: -1000 // Debit full balance
-      }));
-
-      invalidMolecule.addAtom(new Atom({
-        isotope: 'V',
-        wallet: sourceWallet,
-        value: 500  // Credit only half - unbalanced!
-      }));
-
-      invalidMolecule.sign({});
-
-      const shouldFail = invalidMolecule.check(sourceWallet);
-      if (shouldFail) {
-        logTest('Unbalanced transfer validation (should FAIL)', false, 'Unbalanced molecule passed validation');
-        allNegativeTestsPassed = false;
-      } else {
-        logTest('Unbalanced transfer validation (should FAIL)', true);
-      }
-    } catch (error) {
-      // Exception is expected for unbalanced transfers
-      logTest('Unbalanced transfer validation (should FAIL)', true);
-    }
-
-    results.tests.negativeCases = {
-      passed: allNegativeTestsPassed,
-      description: 'Anti-cheating validation tests',
-      testCount: 3
-    };
-
-    return allNegativeTestsPassed;
-
-  } catch (error) {
-    log(`  ❌ ERROR: ${error.message}`, 'red');
-    results.tests.negativeCases = {
-      passed: false,
-      error: error.message
-    };
-    return false;
-  }
+  const allNegativeTestsPassed = outcomes.every(Boolean);
+  results.tests.negativeCases = {
+    passed: allNegativeTestsPassed,
+    description: 'Anti-cheating validation tests',
+    testCount: outcomes.length,
+    ...(allNegativeTestsPassed ? {} : { validationError: `${outcomes.filter(ok => !ok).length} negative case(s) not rejected with their expected exception` })
+  };
+  return allNegativeTestsPassed;
 }
+
+// The eight SDKs' results files (edge-kit/aggregate.mjs EXPECTED_LANES). A validator's
+// expected peers are the seven other than itself; any other *-results.json is ignored.
+const SDK_RESULTS_FILES = [
+  'javascript', 'typescript', 'python', 'php', 'kotlin', 'rust', 'c', 'cpp'
+];
+
+// A peer must publish every molecule type before we can claim to have validated it.
+// The per-peer loop iterates the keys that are PRESENT, so an omitted molecule is
+// indistinguishable from a validated one — which is how Kotlin's Round-2 drop of
+// tokenCreation/walletCreation/shadowWalletClaim passed every peer on 2026-07-27.
+// Mirrors requiredMoleculeKeys in sdks/canonical-test-keys.json.
+const REQUIRED_MOLECULE_TYPES = [
+  'metadata', 'simpleTransfer', 'complexTransfer', 'tokenCreation',
+  'walletCreation', 'shadowWalletClaim', 'mlkem768'
+];
 
 /**
  * Cross-SDK Validation
@@ -1231,9 +1226,10 @@ async function testCrossSdkValidation() {
   }
 
   const resultsDir = sharedResultsDir;
-  results.crossValidation.ran = true;
+  const expectedPeers = SDK_RESULTS_FILES.filter(name => name !== 'typescript');
+  results.crossValidation = { ran: true, targetsExpected: expectedPeers.length, targetsValidated: 0 };
 
-  // A missing shared directory in Round 2 is a HARD FAILURE, not a skip. This returned
+  // A missing shared directory is a HARD FAILURE, not a skip. This returned
   // true — "compatible" — having found nothing to check.
   if (!fs.existsSync(resultsDir)) {
     log('  ❌ Shared results directory not found — cross-validation CANNOT run', 'red');
@@ -1241,39 +1237,35 @@ async function testCrossSdkValidation() {
     return false;
   }
 
-  // Scope to *-results.json. `.endsWith('.json')` also matched the canonical vector
-  // MASTERS in this directory (canonical-patent-vectors.json,
-  // cross-platform-test-vectors.json) and fed them in as peer SDK results; they carry no
-  // `molecules` object, so they inflated the peer count while contributing nothing.
-  const resultFiles = fs.readdirSync(resultsDir).filter(f =>
-    f.endsWith('-results.json') &&
-    !f.includes('typescript')
-  );
+  // Only the canonical peers' results files count. Scanning for any *-results.json let
+  // a stray file inflate the expected count, and a MISSING peer simply lowered it, so a
+  // run that validated six of seven peers still reported full coverage.
+  const presentPeers = [];
+  for (const name of expectedPeers) {
+    if (fs.existsSync(path.join(resultsDir, `${name}-results.json`))) {
+      presentPeers.push(name);
+    } else {
+      log(`  ❌ ${name}-results.json missing`, 'red');
+    }
+  }
 
-  // Zero peers in Round 2 means Round 2 did not happen.
-  if (resultFiles.length === 0) {
-    log('  ❌ No peer SDK results found — nothing to cross-validate', 'red');
+  // Zero peers means cross-validation did not happen.
+  if (presentPeers.length === 0) {
+    log(`  ❌ No peer SDK results found in ${resultsDir} — nothing to cross-validate`, 'red');
     results.crossSdkCompatible = false;
     return false;
   }
 
-  results.crossValidation.targetsExpected = resultFiles.length;
   let peersValidated = 0;
   let allValid = true;
 
-  for (const file of resultFiles) {
-    const sdkName = file.replace('-results.json', '');
+  for (const sdkName of presentPeers) {
+    const file = `${sdkName}-results.json`;
     const otherResults = JSON.parse(fs.readFileSync(path.join(resultsDir, file), 'utf8'));
+    // A peer counts as validated only if every required molecule verified, ML-KEM768
+    // interoperated both ways, and nothing about it failed or threw.
+    let peerValid = true;
 
-    // A peer must publish every molecule type before we can claim to have validated it.
-    // The loop below iterates the keys that are PRESENT, so an omitted molecule is
-    // indistinguishable from a validated one — which is how Kotlin's Round-2 drop of
-    // tokenCreation/walletCreation/shadowWalletClaim passed every peer on 2026-07-27.
-    // Mirrors requiredMoleculeKeys in sdks/canonical-test-keys.json.
-    const REQUIRED_MOLECULE_TYPES = [
-      'metadata', 'simpleTransfer', 'complexTransfer', 'tokenCreation',
-      'walletCreation', 'shadowWalletClaim', 'mlkem768'
-    ];
     const published = otherResults.molecules || {};
     const absent = REQUIRED_MOLECULE_TYPES.filter(
       t => published[t] === undefined || published[t] === null || published[t] === ''
@@ -1282,6 +1274,7 @@ async function testCrossSdkValidation() {
       log(`    ❌ ${sdkName} published no molecule for: ${absent.join(', ')}`, 'red');
       logTest(`${sdkName} publishes all required molecules`, false);
       allValid = false;
+      peerValid = false;
     }
 
     // Validate molecules from other SDK
@@ -1301,6 +1294,26 @@ async function testCrossSdkValidation() {
             mlKemParameterSet: 768
           });
 
+          // Interoperability proper: the peer encrypted originalPlaintext to this shared
+          // configuration's public key, so we must decrypt it back to exactly that text.
+          let decryptionCompatible = false;
+          try {
+            const decryptedFromThem = await ourWallet.decryptMessage(mlkemData.encryptedData);
+            decryptionCompatible = decryptedFromThem === mlkemData.originalPlaintext;
+
+            if (decryptionCompatible) {
+              log(`    ✅ Can decrypt ${sdkName} encrypted message`, 'green');
+            } else {
+              log(`    ❌ Cannot decrypt ${sdkName} message (expected: "${mlkemData.originalPlaintext}", got: "${decryptedFromThem}")`, 'red');
+            }
+          } catch (error) {
+            log(`    ❌ ${sdkName} decryption failed: ${error.message}`, 'red');
+            decryptionCompatible = false;
+          }
+
+          logTest(`${sdkName} ${moleculeType} decryption compatibility`, decryptionCompatible);
+
+          // Additionally required: their public key must be usable to encrypt to them.
           let mlkemValid = false;
           try {
             // Test: Can we encrypt a message for their public key?
@@ -1320,8 +1333,9 @@ async function testCrossSdkValidation() {
 
           logTest(`${sdkName} ${moleculeType} encryption compatibility`, mlkemValid);
 
-          if (!mlkemValid) {
+          if (!decryptionCompatible || !mlkemValid) {
             allValid = false;
+            peerValid = false;
           }
         } else {
           // Standard molecule validation for non-ML-KEM768 types
@@ -1389,16 +1403,20 @@ async function testCrossSdkValidation() {
           
           if (!isValid) {
             allValid = false;
+            peerValid = false;
           }
         }
       } catch (error) {
         logTest(`${sdkName} ${moleculeType} molecule validation`, false);
         log(`    Error: ${error.message}`, 'red');
         allValid = false;
+        peerValid = false;
       }
     }
 
-    peersValidated++;
+    if (peerValid) {
+      peersValidated++;
+    }
   }
 
   // COVERAGE FLOOR. `allValid` starts true and only becomes false on a DETECTED failure,

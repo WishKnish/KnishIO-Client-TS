@@ -1,32 +1,16 @@
 import { defineConfig, configDefaults } from 'vitest/config';
 import { resolve } from 'path';
-import { existsSync } from 'fs';
 
-// Cycle 127: generate-secret-parity.test.ts statically imports the shared
-// canonical-patent-vectors.json from the monorepo's sdks/shared-test-results/
-// (one level above this repo) — ABSENT in a standalone GitHub Actions checkout.
-// Gate it on the fixture existing: run in the monorepo, skip in standalone CI.
-const canonicalVectorsPresent = existsSync(
-  resolve(__dirname, '../shared-test-results/canonical-patent-vectors.json'),
-);
-
-// Cycle 135: cross-platform-canonical.test.ts statically imports the shared
-// cross-platform-test-vectors.json from the monorepo parent — same standalone-CI
-// gate as above (run in the monorepo, skip in a standalone checkout).
-const crossPlatformVectorsPresent = existsSync(
-  resolve(__dirname, '../shared-test-results/cross-platform-test-vectors.json'),
-);
-
+// The suites that read the monorepo's shared vector masters
+// (../shared-test-results/, absent in a standalone checkout) guard the fixture
+// themselves and register one visible skipped test when it is missing, so the
+// absence shows up in the run's skip count instead of the file vanishing.
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
     testTimeout: 60000,
-    exclude: [
-      ...configDefaults.exclude,
-      ...(canonicalVectorsPresent ? [] : ['**/generate-secret-parity.test.ts', '**/buffer-conservation.test.ts']),
-      ...(crossPlatformVectorsPresent ? [] : ['**/cross-platform-canonical.test.ts']),
-    ],
+    exclude: [...configDefaults.exclude],
   },
   resolve: {
     alias: {
