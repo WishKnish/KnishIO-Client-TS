@@ -403,7 +403,7 @@ export {
 // MUST equal package.json's "version". The CI `version consistency` job enforces this via
 // .github/scripts/check-version.sh, which parses this exact line — keep the literal form
 // `export const SDK_VERSION = '<semver>'` intact so the gate can read it.
-export const SDK_VERSION = '1.2.0'
+export const SDK_VERSION = '1.2.1'
 export const SDK_NAME = 'KnishIO-Client-TS'
 export const COMPATIBLE_SERVER_VERSIONS = [4, 5]
 
