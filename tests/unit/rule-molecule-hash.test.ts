@@ -7,9 +7,10 @@
  *   -> JSON.stringify(rules) into AtomMeta 'rule' -> Atom.getHashableValues -> hashAtoms
  *   -> molecular hash -> WOTS+ signature.
  *
- * The expected values below were generated on the pre-migration tree (zod 3.25.76) and are
- * pasted in deliberately: a self-comparing test would prove nothing. If a schema edit ever
- * changes a parsed VALUE or its KEY ORDER, these assertions fail.
+ * The expected rule string was generated on the pre-migration tree (zod 3.25.76) and the digest
+ * by the JS reference (@wishknish/knishio-client-js 1.2.1); both are pasted in deliberately: a
+ * self-comparing test would prove nothing. If a schema edit ever changes a parsed VALUE or its
+ * KEY ORDER, or createRule stops adding the policy as JS does, these assertions fail.
  *
  * `meta` keys are deliberately in non-alphabetical order so a key-order regression surfaces.
  *
@@ -50,7 +51,7 @@ const SOURCE_POSITION = '1'.repeat(64)
 const REMAINDER_POSITION = '2'.repeat(64)
 const FIXED_CREATED_AT = '1700000000000'
 
-const buildRuleAtom = () => {
+const buildRuleAtom = (policy?: Record<string, any> | null) => {
   const secret = generateSecret(SEED)
   const source = new Wallet({ secret, token: TOKEN, position: SOURCE_POSITION })
   const remainder = new Wallet({ secret, token: TOKEN, position: REMAINDER_POSITION })
@@ -66,7 +67,8 @@ const buildRuleAtom = () => {
   molecule.createRule({
     metaType: 'walletBundle',
     metaId: 'd'.repeat(64),
-    rule: [Rule.toObject(RULE_INPUT)]
+    rule: [Rule.toObject(RULE_INPUT)],
+    ...(policy !== undefined ? { policy } : {})
   })
 
   const ruleAtom = molecule.atoms.find(a => a.isotope === 'R')
@@ -91,10 +93,19 @@ describe('R-isotope rule molecule: zod-parsed rule bytes reach the molecular has
     )
   })
 
-  it('hashes the zod-parsed rule atom to the byte-identical pre-migration digest', () => {
+  it('hashes the zod-parsed rule atom to the JS reference digest', () => {
     const hash = Atom.hashAtoms({ atoms: [buildRuleAtom()] })
 
-    // Generated on the pre-migration tree (zod 3.25.76).
-    expect(hash).toBe('038ge57db4d07043f65gcda54d27d29471df84ce48962036d8d4505b77ad7dfg')
+    // The JS reference (@wishknish/knishio-client-js 1.2.1) hashes this R atom, policy included, to this value.
+    expect(hash).toBe('0044d2d333e085af0bdee84gd6a7e52g516f603f685bdefbfb8044f9af096507')
+  })
+
+  it('adds the policy for a null policy, as the client passes it', () => {
+    const ruleAtom = buildRuleAtom(null)
+
+    expect((ruleAtom.meta ?? []).map(m => m.key)).toEqual(['rule', 'policy'])
+    expect(Atom.hashAtoms({ atoms: [ruleAtom] })).toBe(
+      '0044d2d333e085af0bdee84gd6a7e52g516f603f685bdefbfb8044f9af096507'
+    )
   })
 })

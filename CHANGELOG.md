@@ -13,6 +13,17 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
+## [Unreleased]
+
+### Fixed
+
+- `Molecule.createRule` always adds the policy meta to the R atom, as the JS reference's
+  `createRule` does (`atomMeta.addPolicy(policy)`). It skipped `addPolicy` for an empty policy,
+  so a rule created without one carried only the `rule` meta, and its R atom hashed to different
+  bytes than JS for the same inputs. An explicit `null` policy, which `KnishIOClient.createRule`
+  passes by default, is treated as `{}`. The validator accepted both forms; this is byte parity
+  with JS. `tests/unit/rule-molecule-hash.test.ts` now pins the JS 1.2.1 digest.
+
 ## [1.2.1] — 2026-09-25
 
 ### Fixed

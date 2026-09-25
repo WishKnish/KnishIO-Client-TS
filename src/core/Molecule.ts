@@ -938,7 +938,7 @@ export default class Molecule {
     metaType: string
     metaId: string
     rule: Rule[] | any[] | any  // Accept single object or array
-    policy?: Record<string, any>
+    policy?: Record<string, any> | null
   }): Molecule {
     if (!this.sourceWallet) {
       throw new Error('Source wallet required for createRule')
@@ -958,10 +958,8 @@ export default class Molecule {
       rule: JSON.stringify(rules)
     })
 
-    // Add policies to meta object only if policy exists and has keys (matching JS SDK)
-    if (policy && Object.keys(policy).length > 0) {
-      atomMeta.addPolicy(policy)
-    }
+    // JS createRule always adds the policy (its {} default still fills per-key defaults).
+    atomMeta.addPolicy(policy ?? {})
 
     // Create R-isotope atom for rule (matching JS SDK)
     this.addAtom(Atom.create({
