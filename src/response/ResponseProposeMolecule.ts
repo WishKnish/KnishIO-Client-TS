@@ -169,7 +169,8 @@ export default class ResponseProposeMolecule extends Response {
         code: 'HASH_MISMATCH'
       })
     }
-    if (/ots.*position.*reuse|position.*already.*used|ots.*verification/.test(lc)) {
+    // Validator 0.5.0 words the same rejection as "OTS key reuse rejected ... is already consumed".
+    if (/ots.*(?:position|key).*reuse|position.*already.*(?:used|consumed)|ots.*verification/.test(lc)) {
       return new SignatureMismatchException(reason, {
         details: { reason },
         code: 'OTS_VERIFICATION_FAILED'

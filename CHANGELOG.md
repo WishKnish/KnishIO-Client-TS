@@ -25,6 +25,12 @@ detail, the entry says so instead of guessing.
   first molecule after such a login was rejected with `Wallet not found: bundle=…, position=…`.
   Querying the pointer is correct against earlier validators too. Pinned by
   `tests/unit/KnishIOClient-auth-continuid.test.ts`.
+- `ResponseProposeMolecule.toException()` recognises validator 0.5.0's wording of an OTS-reuse
+  rejection ("OTS key reuse rejected (NIST SP 800-208): signing key at position … is already
+  consumed") and returns `SignatureMismatchException` with code `OTS_VERIFICATION_FAILED`, as it
+  does for the older "OTS position reuse" wording. It returned `null` for the new wording, so
+  callers that branch on the exception type, and the client's own position-drift handler, treated
+  the rejection as unclassified. Pinned by `tests/unit/ResponseProposeMolecule.test.ts`.
 
 ## [1.2.0] — 2026-09-20
 

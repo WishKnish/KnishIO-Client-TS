@@ -58,6 +58,16 @@ describe('ResponseProposeMolecule.toException', () => {
     }
   })
 
+  it('classifies the validator 0.5.0 OTS key-reuse wording as OTS_VERIFICATION_FAILED', () => {
+    // Validator 0.5.0 (f120a65) consumes the signing key at insert and words the rejection as key
+    // reuse. handlePositionDrift keys on this class to drop a stale cached remainder.
+    const reason = 'OTS key reuse rejected (NIST SP 800-208): signing key at position ' +
+      '06ed6327dd3c4c63d0d2e3b594b92a3ef59c50479c3413079c1b5614953123e5 is already consumed'
+    const exc = makeResponse('rejected', reason).toException()
+    expect(exc).toBeInstanceOf(SignatureMismatchException)
+    expect(exc?.code).toBe('OTS_VERIFICATION_FAILED')
+  })
+
   it('classifies ContinuID chain violations as AtomIndexException with INDEX_CONFLICT', () => {
     const cases = [
       'ContinuID chain violation: previousPosition mismatch',
