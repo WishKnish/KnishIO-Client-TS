@@ -13,19 +13,7 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
-## [Unreleased]
-
-### Security
-
-- `CheckMolecule.ots()` compares the address recovered from the OTS signature only with
-  `atoms[0].walletAddress`. It used the address in an `atoms[0]` meta `signingWallet` instead
-  when one was present, so a molecule that claimed one wallet's address but carried another
-  wallet's signature verified as valid and was attributed to the claimed wallet. Offline
-  verifiers that rely on `check()`, such as knishproof, reported such a molecule valid.
-  `Molecule.sign()` likewise derived its key from the `signingWallet` meta's position; it now
-  always signs with `atoms[0].position`. Validator 0.5.0 and later reject the meta on every
-  isotope. Pinned by `tests/unit/signing-wallet-forgery.test.ts` against a cross-SDK fixture
-  built with the JS 1.2.1 reference (`tests/fixtures/signing-wallet-forgery.json`).
+## [1.3.0] — 2026-09-26
 
 ### Changed
 
@@ -71,6 +59,18 @@ detail, the entry says so instead of guessing.
   handler now drops the cached remainder wallet and the next molecule re-queries the ContinuID
   position. Pinned by `tests/unit/ResponseProposeMolecule.test.ts` and
   `tests/unit/KnishIOClient-position-drift.test.ts`.
+
+### Security
+
+- `CheckMolecule.ots()` compares the address recovered from the OTS signature only with
+  `atoms[0].walletAddress`. It used the address in an `atoms[0]` meta `signingWallet` instead
+  when one was present, so a molecule that claimed one wallet's address but carried another
+  wallet's signature verified as valid and was attributed to the claimed wallet. Offline
+  verifiers that rely on `check()`, such as knishproof, reported such a molecule valid.
+  `Molecule.sign()` likewise derived its key from the `signingWallet` meta's position; it now
+  always signs with `atoms[0].position`. Validator 0.5.0 and later reject the meta on every
+  isotope. Pinned by `tests/unit/signing-wallet-forgery.test.ts` against a cross-SDK fixture
+  built with the JS 1.2.1 reference (`tests/fixtures/signing-wallet-forgery.json`).
 
 ## [1.2.1] — 2026-09-25
 
@@ -590,7 +590,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.2.1...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.3.0...HEAD
+[1.3.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.0
 [1.2.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.2.1
 [1.2.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.2.0
 [1.1.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.1.0
