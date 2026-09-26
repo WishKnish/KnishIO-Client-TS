@@ -2433,13 +2433,11 @@ export default class KnishIOClient {
   async withdrawBufferToken({
     tokenSlug,
     amount,
-    sourceWallet = null,
-    signingWallet = null
+    sourceWallet = null
   }: {
     tokenSlug: TokenSlug | string
     amount: number | string
     sourceWallet?: Wallet | null
-    signingWallet?: Wallet | null
   }): Promise<Response> {
     this.log('info', `KnishIOClient::withdrawBufferToken() - Withdrawing ${amount} of ${tokenSlug} from buffer...`)
 
@@ -2454,12 +2452,7 @@ export default class KnishIOClient {
     // Initialize the withdraw buffer token mutation
     const recipients: Record<string, any> = {}
     recipients[this.getBundle()] = amount
-    // Only include signingWallet if it exists (exactOptionalPropertyTypes compliance)
-    const fillMoleculeParams: any = { recipients }
-    if (signingWallet) {
-      fillMoleculeParams.signingWallet = signingWallet
-    }
-    await mutation.fillMolecule(fillMoleculeParams)
+    await mutation.fillMolecule({ recipients })
 
     // Execute the mutation
     const response = await this.executeQuery(mutation)

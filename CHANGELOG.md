@@ -15,6 +15,25 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+### Security
+
+- `CheckMolecule.ots()` compares the address recovered from the OTS signature only with
+  `atoms[0].walletAddress`. It used the address in an `atoms[0]` meta `signingWallet` instead
+  when one was present, so a molecule that claimed one wallet's address but carried another
+  wallet's signature verified as valid and was attributed to the claimed wallet. Offline
+  verifiers that rely on `check()`, such as knishproof, reported such a molecule valid.
+  `Molecule.sign()` likewise derived its key from the `signingWallet` meta's position; it now
+  always signs with `atoms[0].position`. Validator 0.5.0 and later reject the meta on every
+  isotope. Pinned by `tests/unit/signing-wallet-forgery.test.ts` against a cross-SDK fixture
+  built with the JS 1.2.1 reference (`tests/fixtures/signing-wallet-forgery.json`).
+
+### Changed
+
+- **BREAKING:** removed the `signingWallet` parameter from `KnishIOClient.withdrawBufferToken()`,
+  `MutationWithdrawBufferToken.fillMolecule()` and `Molecule.initWithdrawBuffer()`, and removed
+  `AtomMeta.setSigningWallet()`. Code that passes `signingWallet` or calls `setSigningWallet`
+  no longer compiles. It always produced a molecule that validator 0.5.0 and later reject.
+
 ### Fixed
 
 - `Molecule.createRule` always adds the policy meta to the R atom, as the JS reference's

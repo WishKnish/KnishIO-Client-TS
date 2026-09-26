@@ -70,7 +70,6 @@ import Wallet from '@/core/Wallet'
 import Rule from '@/instance/rules/Rule'
 import { base64ToHex, chunkSubstr } from '@/libraries/strings'
 import { shake256 } from '@/libraries/crypto'
-import Dot from '@/libraries/Dot'
 import Molecule from '@/core/Molecule'
 
 // Type definitions for Molecule structure
@@ -747,22 +746,8 @@ export default class CheckMolecule {
       throw new SignatureMismatchException()
     }
 
-    // Get a signing address
-    let signingAddress = signingAtom.walletAddress
-
-    // Get signing wallet from first atom's metas
-    const signingWallet = Dot.get(signingAtom.aggregatedMeta(), 'signingWallet')
-
-    // Try to get custom signing address from the metas (local molecule with server secret)
-    if (signingWallet) {
-      const parsedWallet = JSON.parse(signingWallet as string)
-      const walletAddress = Dot.get(parsedWallet, 'address')
-      if (walletAddress) {
-        signingAddress = walletAddress as string
-      }
-    }
-
-    if (address !== signingAddress) {
+    // The recovered address must match the address the signing atom claims
+    if (address !== signingAtom.walletAddress) {
       throw new SignatureMismatchException()
     }
 

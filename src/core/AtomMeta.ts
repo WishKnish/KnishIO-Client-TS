@@ -149,25 +149,6 @@ export default class AtomMeta {
   }
 
   /**
-   * Set signing wallet metadata
-   * @param signingWallet - Wallet used for signing
-   * @return This instance for chaining
-   */
-  setSigningWallet(signingWallet: any): AtomMeta {
-    this.merge({
-      signingWallet: JSON.stringify({
-        tokenSlug: signingWallet.token,
-        bundleHash: signingWallet.bundle,
-        address: signingWallet.address,
-        position: signingWallet.position,
-        pubkey: signingWallet.pubkey,
-        characters: signingWallet.characters
-      })
-    })
-    return this
-  }
-
-  /**
    * Add policy metadata
    * @param policy - Policy object to add
    * @return This instance for chaining

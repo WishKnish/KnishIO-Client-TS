@@ -412,25 +412,8 @@ export default class Molecule {
       throw new SignatureMalformedException('No atoms available for signing!')
     }
 
-    // Set signing position from the first atom
-    let signingPosition = signingAtom.position
-
-    // Get signing wallet from first atom's metas (matching JS SDK exactly)
-    // This handles buffer withdraw reconciliation where a different wallet signs
-    const signingWalletMeta = signingAtom.aggregatedMeta ? signingAtom.aggregatedMeta() : null
-    const signingWalletJson = signingWalletMeta?.signingWallet as string | undefined
-    if (signingWalletJson) {
-      try {
-        const parsedSigningWallet = JSON.parse(signingWalletJson)
-        if (parsedSigningWallet.position) {
-          signingPosition = parsedSigningWallet.position
-        }
-      } catch {
-        // Invalid JSON in signingWallet meta, use default position
-      }
-    }
-
-    // Signing position is required
+    // The private key comes from the first atom's own position
+    const signingPosition = signingAtom.position
     if (!signingPosition) {
       throw new SignatureMalformedException('Signing wallet must have a position!')
     }
@@ -1292,15 +1275,12 @@ export default class Molecule {
    * Matches JavaScript SDK Molecule.initWithdrawBuffer implementation exactly
    *
    * @param recipients - Map of recipientBundle → amount
-   * @param signingWallet - Optional signing wallet for reconciliation
    * @return This molecule instance for chaining
    */
   initWithdrawBuffer({
-    recipients,
-    signingWallet = null
+    recipients
   }: {
     recipients: Record<string, number>
-    signingWallet?: any | null
   }): Molecule {
     if (!this.sourceWallet) {
       throw new Error('Source wallet required for buffer withdrawal')
@@ -1316,18 +1296,11 @@ export default class Molecule {
       throw new BalanceInsufficientException()
     }
 
-    // Set a meta signing position for molecule correct reconciliation
-    const firstAtomMeta = new AtomMeta()
-    if (signingWallet) {
-      firstAtomMeta.setSigningWallet(signingWallet)
-    }
-
     // Debit full balance from source (B-isotope)
     this.addAtom(Atom.create({
       isotope: 'B',
       wallet: this.sourceWallet,
       value: -Number(this.sourceWallet.balance),
-      meta: firstAtomMeta,
       metaType: 'walletBundle',
       metaId: this.sourceWallet.bundle!
     }))

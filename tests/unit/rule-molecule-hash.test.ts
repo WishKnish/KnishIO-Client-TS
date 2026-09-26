@@ -51,7 +51,7 @@ const SOURCE_POSITION = '1'.repeat(64)
 const REMAINDER_POSITION = '2'.repeat(64)
 const FIXED_CREATED_AT = '1700000000000'
 
-const buildRuleAtom = (policy?: Record<string, any> | null) => {
+const buildRuleAtom = (policy?: Record<string, unknown> | null) => {
   const secret = generateSecret(SEED)
   const source = new Wallet({ secret, token: TOKEN, position: SOURCE_POSITION })
   const remainder = new Wallet({ secret, token: TOKEN, position: REMAINDER_POSITION })
