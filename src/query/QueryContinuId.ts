@@ -64,8 +64,8 @@ export default class QueryContinuId extends Query {
   constructor(graphQLClient: GraphQLClient, knishIOClient: KnishIOClient) {
     super(graphQLClient, knishIOClient)
 
-    this.$__query = gql`query ($bundle: String!) {
-      ContinuId(bundle: $bundle) {
+    this.$__query = gql`query ($bundle: String!, $token: String) {
+      ContinuId(bundle: $bundle, token: $token) {
         address,
         bundleHash,
         tokenSlug,

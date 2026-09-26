@@ -26,8 +26,8 @@ describe.skipIf(!runCipherHash)('CipherHash live ML-KEM round-trip (PQ Phase E)'
     // second auth would rotate the USER remainder via ContinuID → a different address/position/
     // pubkey, which is correct protocol behaviour, not a transport bug.)
     //
-    // The session authenticates PLAINTEXT on purpose. The AUTH wallet's ML-KEM pubkey is conveyed
-    // as a signed `walletPubkey` U-atom meta regardless of `encrypt` (KnishIOClient.ts:2546-2553),
+    // The session authenticates PLAINTEXT on purpose. The signing wallet's ML-KEM pubkey is conveyed
+    // as a signed `walletPubkey` U-atom meta regardless of `encrypt` (KnishIOClient.proposeProfileAuthorization),
     // and the validator's CipherHash handler needs only that key — so an `encrypt: false` session
     // still speaks the encrypted transport. Authenticating with `encrypt: true` instead would make
     // the plaintext baseline leg below a silent downgrade, which the validator rejects when

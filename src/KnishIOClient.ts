@@ -1233,17 +1233,20 @@ export default class KnishIOClient {
 
   /**
    * Query next ContinuId wallet
+   *
+   * @param token - Restricts the lookup to wallets of this token. Without it the validator falls
+   *   back to the bundle's newest wallet of ANY token when the bundle has no ContinuID pointer.
    */
   async queryContinuId({
-    bundle
+    bundle,
+    token = null
   }: {
     bundle: BundleHash | string
+    token?: string | null
   }): Promise<Response> {
     const query = this.createQuery(QueryContinuId)
 
-    return this.executeQuery(query, {
-      bundle
-    }) as Promise<Response>
+    return this.executeQuery(query, token ? { bundle, token } : { bundle }) as Promise<Response>
   }
 
   /**
@@ -2502,7 +2505,13 @@ export default class KnishIOClient {
 
   /**
    * Request profile authentication token
-   * Matches JavaScript SDK requestProfileAuthToken implementation
+   *
+   * A returning user (the bundle has a USER ContinuID pointer) signs from the USER wallet
+   * registered at that pointer, so validator 0.5.0+ marks the token proven and the identity keeps
+   * read/subscription access to permissioned and private cells. A first login — or a pointer this
+   * secret does not own — signs from a fresh AUTH wallet as before. A rejected pointer-signed
+   * login falls back to the AUTH login exactly once, so one call sends at most two
+   * authorization molecules (testnet allows 3 auths/min/IP).
    */
   async requestProfileAuthToken({
     secret,
@@ -2516,16 +2525,61 @@ export default class KnishIOClient {
     // Set the secret
     this.setSecret(secret)
 
+    // Filtered to USER: unfiltered, a bundle without a pointer answers with its newest wallet of
+    // any token, which is not an identity wallet the validator would accept as the signer.
+    const pointer = (await this.queryContinuId({
+      bundle: this.getBundle(),
+      token: 'USER'
+    }))?.payload() as Wallet | null
+
+    let pointerWallet: Wallet | null = null
+    if (pointer && pointer.token === 'USER' && pointer.position) {
+      const wallet = new Wallet({
+        secret,
+        token: 'USER',
+        position: pointer.position,
+        mlKemParameterSet: this.getMlKemParameterSet()
+      })
+      if (!pointer.address || wallet.address === pointer.address) {
+        pointerWallet = wallet
+      } else {
+        this.log('warn', 'KnishIOClient::requestProfileAuthToken() - ContinuID wallet address does not derive from this secret; signing from a fresh AUTH wallet')
+      }
+    }
+
+    if (pointerWallet) {
+      const response = await this.proposeProfileAuthorization(pointerWallet, encrypt)
+      if (response.success()) {
+        this.log('info', 'KnishIOClient::requestProfileAuthToken() - Auth token signed from the ContinuID pointer (proven)')
+        return this.acceptProfileAuthorization(response, pointerWallet, encrypt)
+      }
+      this.log('warn', `KnishIOClient::requestProfileAuthToken() - Pointer-signed authorization rejected (${response.reason()}); falling back once to an AUTH-wallet login`)
+    }
+
     // Generate a signing wallet with AUTH token (matching JavaScript SDK)
     const wallet = new Wallet({
       secret,
       token: 'AUTH',
       mlKemParameterSet: this.getMlKemParameterSet()
     })
+    const response = await this.proposeProfileAuthorization(wallet, encrypt)
 
-    // Create a molecule with the AUTH wallet as source
+    if (!response.success()) {
+      throw new AuthorizationRejectedException(
+        `KnishIOClient::requestProfileAuthToken() - Authorization attempt rejected by ledger. Reason: ${response.reason()}`
+      )
+    }
+
+    this.log('info', `KnishIOClient::requestProfileAuthToken() - Auth token signed from a fresh AUTH wallet (${pointerWallet ? 'fallback after the pointer-signed login was rejected' : 'no usable ContinuID pointer'})`)
+    return this.acceptProfileAuthorization(response, wallet, encrypt)
+  }
+
+  /**
+   * Signs and proposes a profile authorization molecule from the given source wallet.
+   */
+  private async proposeProfileAuthorization(wallet: Wallet, encrypt: boolean): Promise<ResponseRequestAuthorization> {
     const molecule = await this.createMolecule({
-      secret,
+      secret: this.getSecret(),
       sourceWallet: wallet
     })
 
@@ -2536,7 +2590,7 @@ export default class KnishIOClient {
     })
 
     // Initialize the profile auth mutation.
-    // PQ-transport Phase E: convey the AUTH source wallet's ML-KEM public key as a SIGNED
+    // PQ-transport Phase E: convey the source wallet's ML-KEM public key as a SIGNED
     // walletPubkey U-atom meta, so the validator can encrypt CipherHash responses back to THIS
     // wallet (the one that decrypts them). Signed → MITM can't swap the target. Conveyed
     // unconditionally (parity with JS/Kotlin/PHP), so even a plaintext auth primes enc_pubkey.
@@ -2555,22 +2609,26 @@ export default class KnishIOClient {
       throw new CodeException('Profile auth token request failed')
     }
 
-    // Did the authorization molecule get accepted?
-    if (response.success()) {
-      // Create & set an auth token from the response data
-      const authToken = AuthToken.create({
-        token: response.token(),
-        expiresAt: response.expiresAt(),
-        encrypt: String(response.encrypt()) === 'true',
-        pubkey: response.pubKey()
-      }, wallet)
-      this.setAuthToken(authToken)
-      this.lastMoleculeQuery = null
-    } else {
-      throw new AuthorizationRejectedException(
-        `KnishIOClient::requestProfileAuthToken() - Authorization attempt rejected by ledger. Reason: ${response.reason()}`
-      )
-    }
+    return response
+  }
+
+  /**
+   * Binds the accepted authorization's token to the wallet that signed it.
+   */
+  private acceptProfileAuthorization(
+    response: ResponseRequestAuthorization,
+    wallet: Wallet,
+    encrypt: boolean
+  ): ResponseRequestAuthorization {
+    // Create & set an auth token from the response data
+    const authToken = AuthToken.create({
+      token: response.token(),
+      expiresAt: response.expiresAt(),
+      encrypt: String(response.encrypt()) === 'true',
+      pubkey: response.pubKey()
+    }, wallet)
+    this.setAuthToken(authToken)
+    this.lastMoleculeQuery = null
 
     // Handle encryption if needed
     if (encrypt) {

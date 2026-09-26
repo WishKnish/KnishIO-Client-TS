@@ -42,6 +42,19 @@ detail, the entry says so instead of guessing.
   bytes than JS for the same inputs. An explicit `null` policy, which `KnishIOClient.createRule`
   passes by default, is treated as `{}`. The validator accepted both forms; this is byte parity
   with JS. `tests/unit/rule-molecule-hash.test.ts` now pins the JS 1.2.1 digest.
+- A returning user's login (`requestProfileAuthToken`, which `requestAuthToken` calls when it
+  has a secret) is now signed from the ContinuID pointer, with the USER wallet the validator
+  registered there (`queryContinuId({ bundle, token: 'USER' })`), so validator 0.5.0 and later
+  issue a proven token and the user keeps read and subscription access to permissioned and
+  private cells. It was signed from a fresh AUTH wallet at a random position, which the validator
+  records as unproven and treats as a guest for those cells. The first login is unchanged. A
+  rejected pointer-signed login falls back once to the previous unproven AUTH-wallet login, so a
+  login sends at most two authorization molecules. `queryContinuId` gains an optional `token`
+  filter; `CheckMolecule.isotopeU()` accepts a USER-signed U atom as well as an AUTH one; and
+  `AuthToken.toSnapshot()` records the signing wallet's token (`wallet.token`), which
+  `AuthToken.restore()` uses, falling back to AUTH for older snapshots, so a restored
+  pointer-signed session derives the same ML-KEM key. Pinned by
+  `tests/unit/KnishIOClient-auth-continuid.test.ts`.
 
 ## [1.2.1] — 2026-09-25
 

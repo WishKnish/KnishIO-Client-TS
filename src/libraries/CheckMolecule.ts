@@ -213,12 +213,13 @@ export default class CheckMolecule {
   /**
    * Validate isotope U atoms
    * @return True if valid
-   * @throws WrongTokenTypeException if token is not AUTH
+   * @throws WrongTokenTypeException if token is neither AUTH (fresh login) nor USER (re-login
+   *   signed from the ContinuID pointer)
    * @throws AtomIndexException if index is not 0
    */
   isotopeU(): boolean {
     for (const atom of this.molecule.getIsotopes('U')) {
-      if (atom.token !== 'AUTH') {
+      if (atom.token !== 'AUTH' && atom.token !== 'USER') {
         throw new WrongTokenTypeException(`Check::isotopeU() - "${atom.token}" is not a valid Token slug for "${atom.isotope}" isotope Atoms!`)
       }
 

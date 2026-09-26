@@ -53,7 +53,9 @@ import Wallet from '@/core/Wallet'
  * so the two can never drift: a field either round-trips or neither side compiles.
  *
  * `wallet.mlKemParameterSet` is optional because snapshots persisted before ML-KEM-1024 became
- * the default do not carry it — see {@link AuthToken.resolveMlKemParameterSet}.
+ * the default do not carry it — see {@link AuthToken.resolveMlKemParameterSet}. `wallet.token` is
+ * optional because snapshots persisted before re-logins were signed from the USER ContinuID
+ * wallet do not carry it; every such session was signed from an AUTH wallet.
  */
 export type AuthTokenSnapshot = {
   token: string
@@ -61,6 +63,7 @@ export type AuthTokenSnapshot = {
   pubkey: string
   encrypt: boolean
   wallet?: {
+    token?: string
     position: string | null
     characters: string | null
     mlKemParameterSet?: 1024 | 768
@@ -134,7 +137,7 @@ export default class AuthToken {
   static restore(snapshot: AuthTokenSnapshot, secret: string): AuthToken {
     const wallet = new Wallet({
       secret,
-      token: 'AUTH',
+      token: snapshot.wallet?.token ?? 'AUTH',
       position: snapshot.wallet?.position ?? null,
       characters: snapshot.wallet?.characters ?? null,
       mlKemParameterSet: AuthToken.resolveMlKemParameterSet(snapshot)
@@ -232,6 +235,7 @@ export default class AuthToken {
       encrypt: this.$__encrypt,
       ...(this.$__wallet ? {
         wallet: {
+          token: this.$__wallet.token,
           position: this.$__wallet.position,
           characters: this.$__wallet.characters,
           mlKemParameterSet: this.$__wallet.mlKemParameterSet
