@@ -188,6 +188,22 @@ export default class ResponseProposeMolecule extends Response {
         code: 'VERIFICATION_FAILED'
       })
     }
+    // Validator 0.5.0 signer binding (Tier 1): atom 0's address is not the wallet registered at
+    // (bundle, token, position). Nothing was consumed.
+    if (/signer address mismatch/.test(lc)) {
+      return new SignatureMismatchException(reason, {
+        details: { reason },
+        code: 'SIGNER_ADDRESS_MISMATCH'
+      })
+    }
+    // Validator 0.5.0 (Tier 2): the signing key is consumed and the chain advanced, so the
+    // cached remainder is stale — handlePositionDrift keys on AtomIndexException.
+    if (/no accepted origin available/.test(lc)) {
+      return new AtomIndexException(reason, {
+        details: { reason },
+        code: 'ORIGIN_PENDING'
+      })
+    }
     return null
   }
 

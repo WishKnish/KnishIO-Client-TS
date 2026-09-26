@@ -55,6 +55,22 @@ detail, the entry says so instead of guessing.
   `AuthToken.restore()` uses, falling back to AUTH for older snapshots, so a restored
   pointer-signed session derives the same ML-KEM key. Pinned by
   `tests/unit/KnishIOClient-auth-continuid.test.ts`.
+- A rejected or failed login no longer leaves the client's auth-in-progress guard set.
+  `requestAuthToken` set it and cleared it only on success, so after an
+  `AuthorizationRejectedException` (or any other error) `executeQuery` never refreshed an expired
+  token again. The guard is now cleared in a `finally`. `requestProfileAuthToken` and
+  `requestGuestAuthToken` also hold the guard while they run and restore its previous value, so
+  calling one directly with an expired token no longer starts a second, nested login from its
+  own requests (with a proven re-login, both would sign at the same ContinuID pointer). Pinned by
+  `tests/unit/KnishIOClient-auth-continuid.test.ts`.
+- `ResponseProposeMolecule.toException()` classifies two validator 0.5.0 rejections it returned
+  `null` for. "Signer address mismatch: atom declares …" returns `SignatureMismatchException`
+  with code `SIGNER_ADDRESS_MISMATCH`. "No accepted origin available — origin still pending
+  after timeout …" returns `AtomIndexException` with code `ORIGIN_PENDING`; the validator has
+  consumed the molecule's signing key and advanced the chain, so the client's position-drift
+  handler now drops the cached remainder wallet and the next molecule re-queries the ContinuID
+  position. Pinned by `tests/unit/ResponseProposeMolecule.test.ts` and
+  `tests/unit/KnishIOClient-position-drift.test.ts`.
 
 ## [1.2.1] — 2026-09-25
 

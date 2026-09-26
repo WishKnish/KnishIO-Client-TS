@@ -87,6 +87,26 @@ describe('ResponseProposeMolecule.toException', () => {
     expect(exc?.code).toBe('VERIFICATION_FAILED')
   })
 
+  // Validator 0.5.0 texts, verbatim (signature_verifier.rs, graphql/schema.rs). Each must reach its
+  // own branch: the earlier OTS / chain / signature patterns must not claim either one first.
+  const SIGNER_MISMATCH = 'Signer address mismatch: atom declares 1111, but the wallet registered ' +
+    'for bundle bbbb token USER at position 2222 is 3333'
+  const ORIGIN_PENDING = 'No accepted origin available — origin still pending after timeout. ' +
+    "This molecule's signing key is consumed; re-send from the next position."
+
+  it('classifies the validator 0.5.0 signer-binding rejection as SIGNER_ADDRESS_MISMATCH', () => {
+    const exc = makeResponse('rejected', SIGNER_MISMATCH).toException()
+    expect(exc).toBeInstanceOf(SignatureMismatchException)
+    expect(exc?.code).toBe('SIGNER_ADDRESS_MISMATCH')
+  })
+
+  it('classifies the validator 0.5.0 pending-origin rejection as AtomIndexException with ORIGIN_PENDING', () => {
+    // The validator consumed the signing key and advanced the chain, so this is position drift.
+    const exc = makeResponse('rejected', ORIGIN_PENDING).toException()
+    expect(exc).toBeInstanceOf(AtomIndexException)
+    expect(exc?.code).toBe('ORIGIN_PENDING')
+  })
+
   it('returns null for unclassified rejections', () => {
     // Genuine rejections that don't match any known pattern — caller should
     // fall back to inspecting .reason() text directly.

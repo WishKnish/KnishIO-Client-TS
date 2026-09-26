@@ -271,6 +271,78 @@ describe('KnishIOClient::requestProfileAuthToken — proven re-login from the Co
   })
 })
 
+/** The client's private re-entrancy guard: true only while a login is running. */
+function authInProcess (client: KnishIOClient): unknown {
+  return Reflect.get(client, '$__authInProcess')
+}
+
+/** A token that `executeQuery` treats as expired, so the next request refreshes the login. */
+function expiredToken (secret: string): AuthToken {
+  return AuthToken.create(
+    { token: 'expired', expiresAt: Math.floor(Date.now() / 1000) - 60, pubkey: 'stub-server-pubkey', encrypt: false },
+    new Wallet({ secret, token: 'AUTH' })
+  )
+}
+
+describe('KnishIOClient auth-in-progress guard', () => {
+  let secret: string
+  let pointer: ContinuIdStub
+
+  beforeEach(() => {
+    secret = generateSecret()
+    pointer = {
+      address: new Wallet({ secret, token: 'USER', position: CONTINUID_POSITION }).address!,
+      tokenSlug: 'USER',
+      position: CONTINUID_POSITION
+    }
+  })
+
+  it('is released after a rejected login, so an expired token is refreshed by the next request', async () => {
+    const { client, mutate } = stubbedClient(secret, pointer, ['rejected', 'rejected', 'accepted'])
+
+    await expect(client.requestAuthToken({ secret, encrypt: false }))
+      .rejects.toBeInstanceOf(AuthorizationRejectedException)
+    expect(mutate).toHaveBeenCalledTimes(2)
+    expect(authInProcess(client)).toBe(false)
+
+    // The next request sees an expired token and logs in again before it runs.
+    client.setAuthToken(expiredToken(secret))
+    await client.queryContinuId({ bundle: generateBundleHash(secret), token: 'USER' })
+
+    expect(mutate).toHaveBeenCalledTimes(3)
+    expect(proposedAtoms(mutate, 2)[0].token).toBe('USER')
+    expect(client.getAuthToken()!.isExpired()).toBe(false)
+    expect(authInProcess(client)).toBe(false)
+  })
+
+  it('is held by a direct requestProfileAuthToken, so its own requests do not start a second login', async () => {
+    const { client, mutate } = stubbedClient(secret, pointer, ['accepted', 'accepted'])
+    client.setAuthToken(expiredToken(secret))
+
+    await client.requestProfileAuthToken({ secret, encrypt: false })
+
+    expect(mutate).toHaveBeenCalledTimes(1)
+    expect(proposedAtoms(mutate, 0)[0].token).toBe('USER')
+    expect(client.getAuthToken()!.isExpired()).toBe(false)
+    expect(authInProcess(client)).toBe(false)
+  })
+
+  it('is held by a direct requestGuestAuthToken, so its request does not start a second login', async () => {
+    const { client, mutate } = stubbedClient(secret, pointer, [])
+    mutate.mockResolvedValue({
+      data: {
+        AccessToken: { token: 'guest', pubkey: 'stub-server-pubkey', expiresAt: Math.floor(Date.now() / 1000) + 3600 }
+      }
+    })
+    client.setAuthToken(expiredToken(secret))
+
+    await client.requestGuestAuthToken({ cellSlug: 'test', encrypt: false })
+
+    expect(mutate).toHaveBeenCalledTimes(1)
+    expect(authInProcess(client)).toBe(false)
+  })
+})
+
 describe('Authorization molecules signed from a USER wallet', () => {
   const authMolecule = (secret: string, token: string): Molecule => {
     const molecule = new Molecule({

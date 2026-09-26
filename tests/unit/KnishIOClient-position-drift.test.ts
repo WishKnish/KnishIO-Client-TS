@@ -110,6 +110,13 @@ describe('KnishIOClient::handlePositionDrift', () => {
     expect(client.lastMoleculeQuery).toBeNull()
   })
 
+  it('clears cache on the validator 0.5.0 pending-origin rejection (key consumed, chain advanced)', () => {
+    client.handlePositionDrift(responseFor('rejected', 'No accepted origin available — origin still pending ' +
+      "after timeout. This molecule's signing key is consumed; re-send from the next position."))
+    expect(client.$__remainderWallet).toBeNull()
+    expect(client.lastMoleculeQuery).toBeNull()
+  })
+
   it('does NOT clear cache on generic signature verification failure', () => {
     // VERIFICATION_FAILED (without OTS) means bad signature bytes, not
     // position drift — preserve cache.

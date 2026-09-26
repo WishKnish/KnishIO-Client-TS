@@ -1014,38 +1014,41 @@ export default class KnishIOClient {
       this.setCellSlug(cellSlug)
     }
 
-    // Auth in process...
+    // Auth in process... Cleared in `finally`: a rejected login must not leave the guard set, or
+    // executeQuery never refreshes an expired token again.
     this.$__authInProcess = true
 
-    // Auth token response
-    let response: Response
+    try {
+      // Auth token response
+      let response: Response
 
-    // Authorized user (profile auth with secret)
-    if (secret) {
-      response = await this.requestProfileAuthToken({
-        secret,
-        encrypt
-      })
-    } else {
-      // Guest auth (no secret)
-      response = await this.requestGuestAuthToken({
-        cellSlug: cellSlug || this.getCellSlug(),
-        encrypt
-      })
+      // Authorized user (profile auth with secret)
+      if (secret) {
+        response = await this.requestProfileAuthToken({
+          secret,
+          encrypt
+        })
+      } else {
+        // Guest auth (no secret)
+        response = await this.requestGuestAuthToken({
+          cellSlug: cellSlug || this.getCellSlug(),
+          encrypt
+        })
+      }
+
+      // Log success
+      if (this.$__authToken) {
+        this.log('info', `KnishIOClient::requestAuthToken() - Successfully retrieved auth token...`)
+      }
+
+      // Handle encryption if needed
+      this.switchEncryption(encrypt)
+
+      return response
+    } finally {
+      // Auth process is stopped
+      this.$__authInProcess = false
     }
-
-    // Log success
-    if (this.$__authToken) {
-      this.log('info', `KnishIOClient::requestAuthToken() - Successfully retrieved auth token...`)
-    }
-
-    // Handle encryption if needed
-    this.switchEncryption(encrypt)
-
-    // Auth process is stopped
-    this.$__authInProcess = false
-
-    return response
   }
 
   /**
@@ -2483,24 +2486,32 @@ export default class KnishIOClient {
   } = {}): Promise<Response> {
     this.log('info', 'KnishIOClient::requestGuestAuthToken() - Requesting guest auth token...')
 
-    // Create the mutation (extends Mutation directly, not MutationProposeMolecule)
-    const mutation = this.createQuery(MutationRequestAuthorizationGuest)
+    // Hold the auth guard so this login's own request does not start a nested token refresh.
+    // Restore the caller's value: requestAuthToken holds it until its own `finally`.
+    const authInProcess = this.$__authInProcess
+    this.$__authInProcess = true
+    try {
+      // Create the mutation (extends Mutation directly, not MutationProposeMolecule)
+      const mutation = this.createQuery(MutationRequestAuthorizationGuest)
 
-    // Execute with variables
-    const response = await this.executeQuery(mutation, {
-      cellSlug: cellSlug || this.getCellSlug()
-    })
+      // Execute with variables
+      const response = await this.executeQuery(mutation, {
+        cellSlug: cellSlug || this.getCellSlug()
+      })
 
-    if (!response) {
-      throw new CodeException('Guest auth token request failed')
+      if (!response) {
+        throw new CodeException('Guest auth token request failed')
+      }
+
+      // Handle encryption if needed
+      if (encrypt) {
+        this.switchEncryption(true)
+      }
+
+      return response
+    } finally {
+      this.$__authInProcess = authInProcess
     }
-
-    // Handle encryption if needed
-    if (encrypt) {
-      this.switchEncryption(true)
-    }
-
-    return response
   }
 
   /**
@@ -2525,53 +2536,62 @@ export default class KnishIOClient {
     // Set the secret
     this.setSecret(secret)
 
-    // Filtered to USER: unfiltered, a bundle without a pointer answers with its newest wallet of
-    // any token, which is not an identity wallet the validator would accept as the signer.
-    const pointer = (await this.queryContinuId({
-      bundle: this.getBundle(),
-      token: 'USER'
-    }))?.payload() as Wallet | null
+    // Hold the auth guard so this login's own requests do not start a nested token refresh (a
+    // second login that would sign at the same pointer). Restore the caller's value:
+    // requestAuthToken holds it until its own `finally`.
+    const authInProcess = this.$__authInProcess
+    this.$__authInProcess = true
+    try {
+      // Filtered to USER: unfiltered, a bundle without a pointer answers with its newest wallet of
+      // any token, which is not an identity wallet the validator would accept as the signer.
+      const pointer = (await this.queryContinuId({
+        bundle: this.getBundle(),
+        token: 'USER'
+      }))?.payload() as Wallet | null
 
-    let pointerWallet: Wallet | null = null
-    if (pointer && pointer.token === 'USER' && pointer.position) {
+      let pointerWallet: Wallet | null = null
+      if (pointer && pointer.token === 'USER' && pointer.position) {
+        const wallet = new Wallet({
+          secret,
+          token: 'USER',
+          position: pointer.position,
+          mlKemParameterSet: this.getMlKemParameterSet()
+        })
+        if (!pointer.address || wallet.address === pointer.address) {
+          pointerWallet = wallet
+        } else {
+          this.log('warn', 'KnishIOClient::requestProfileAuthToken() - ContinuID wallet address does not derive from this secret; signing from a fresh AUTH wallet')
+        }
+      }
+
+      if (pointerWallet) {
+        const response = await this.proposeProfileAuthorization(pointerWallet, encrypt)
+        if (response.success()) {
+          this.log('info', 'KnishIOClient::requestProfileAuthToken() - Auth token signed from the ContinuID pointer (proven)')
+          return this.acceptProfileAuthorization(response, pointerWallet, encrypt)
+        }
+        this.log('warn', `KnishIOClient::requestProfileAuthToken() - Pointer-signed authorization rejected (${response.reason()}); falling back once to an AUTH-wallet login`)
+      }
+
+      // Generate a signing wallet with AUTH token (matching JavaScript SDK)
       const wallet = new Wallet({
         secret,
-        token: 'USER',
-        position: pointer.position,
+        token: 'AUTH',
         mlKemParameterSet: this.getMlKemParameterSet()
       })
-      if (!pointer.address || wallet.address === pointer.address) {
-        pointerWallet = wallet
-      } else {
-        this.log('warn', 'KnishIOClient::requestProfileAuthToken() - ContinuID wallet address does not derive from this secret; signing from a fresh AUTH wallet')
+      const response = await this.proposeProfileAuthorization(wallet, encrypt)
+
+      if (!response.success()) {
+        throw new AuthorizationRejectedException(
+          `KnishIOClient::requestProfileAuthToken() - Authorization attempt rejected by ledger. Reason: ${response.reason()}`
+        )
       }
+
+      this.log('info', `KnishIOClient::requestProfileAuthToken() - Auth token signed from a fresh AUTH wallet (${pointerWallet ? 'fallback after the pointer-signed login was rejected' : 'no usable ContinuID pointer'})`)
+      return this.acceptProfileAuthorization(response, wallet, encrypt)
+    } finally {
+      this.$__authInProcess = authInProcess
     }
-
-    if (pointerWallet) {
-      const response = await this.proposeProfileAuthorization(pointerWallet, encrypt)
-      if (response.success()) {
-        this.log('info', 'KnishIOClient::requestProfileAuthToken() - Auth token signed from the ContinuID pointer (proven)')
-        return this.acceptProfileAuthorization(response, pointerWallet, encrypt)
-      }
-      this.log('warn', `KnishIOClient::requestProfileAuthToken() - Pointer-signed authorization rejected (${response.reason()}); falling back once to an AUTH-wallet login`)
-    }
-
-    // Generate a signing wallet with AUTH token (matching JavaScript SDK)
-    const wallet = new Wallet({
-      secret,
-      token: 'AUTH',
-      mlKemParameterSet: this.getMlKemParameterSet()
-    })
-    const response = await this.proposeProfileAuthorization(wallet, encrypt)
-
-    if (!response.success()) {
-      throw new AuthorizationRejectedException(
-        `KnishIOClient::requestProfileAuthToken() - Authorization attempt rejected by ledger. Reason: ${response.reason()}`
-      )
-    }
-
-    this.log('info', `KnishIOClient::requestProfileAuthToken() - Auth token signed from a fresh AUTH wallet (${pointerWallet ? 'fallback after the pointer-signed login was rejected' : 'no usable ContinuID pointer'})`)
-    return this.acceptProfileAuthorization(response, wallet, encrypt)
   }
 
   /**
