@@ -60,3 +60,13 @@ updates:
     ignore:
       - dependency-name: "graphql"
         update-types: ["version-update:semver-major"]
+      # typescript >= 6.1.0 fails the whole grouped npm update (every weekly run since 2026-09-17):
+      # @typescript-eslint/parser and eslint-plugin 8.x declare the peer typescript ">=4.8.4 <6.1.0"
+      # (Yarn YN0060, the "peer dependencies are incorrectly met" Dependabot reports), and Yarn
+      # 4.15's builtin compat/typescript patch cannot apply to 7.x (YN0001 ENOENT lib/_tsc.js), so
+      # `yarn add typescript@7.0.2 --mode=skip-build` exits 1. Lift this only when BOTH hold: a
+      # typescript-eslint release whose peer range admits the new typescript, and a Yarn release
+      # whose builtin typescript patch supports it (check: `yarn add -D typescript@<ver>
+      # --mode=skip-build` exits 0).
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
