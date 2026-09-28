@@ -13,6 +13,67 @@ history. Entries at and below `0.7.8` are reconstructed from commit messages
 rather than written at release time; where the history does not substantiate a
 detail, the entry says so instead of guessing.
 
+## [Unreleased]
+
+## [1.3.1] — 2026-09-28
+
+### Added
+
+- `queryBalance` and `querySourceWallet` accept `type: 'buffer'`.
+
+### Changed
+
+- `Molecule.replenishToken` takes `{ creditedWallet, amount, units }` and is signed by the
+  molecule's USER source wallet. The old `{ amount, units }` form built the unbalanced 2-V
+  molecule described below.
+
+### Fixed
+
+- `replenishToken` builds the molecule validator 0.6.0 accepts: one C atom signed by the USER
+  wallet (`metaType` `token`, meta `action` = `add`, then the credited wallet's `address`,
+  `position` and `pubkey`, its `batchId` when it has one, and the new `tokenUnits` for a stackable
+  replenish), followed by the ContinuID atom. It credits the identity's existing wallet for the
+  token, or a new one. It built `V(+amount) V(+balance+amount)`, which the SDK's own
+  `CheckMolecule` refused as unbalanced, so no replenish ever reached the validator.
+  `Molecule.replenishToken` now takes `{ creditedWallet, amount, units }`; an amount that is not
+  positive throws `NegativeAmountException`, a unit-less replenish of a wallet that holds units
+  throws `StackableUnitAmountException`. The `token_replenish` vectors are consumed by
+  `tests/unit/replenish-fusion-vectors.test.ts`, which replaces `tests/unit/replenish-token.test.ts`
+  (it pinned the old molecule). `tests/unit/KnishIOClient-built-molecules.test.ts` covers the
+  replenish, fusion, buffer-withdraw and claim molecules the client submits, and proves the
+  pre-submit check: a built operation whose molecule fails `check()` is refused with nothing
+  sent, while a caller-built molecule sent through the raw `MutationProposeMolecule` goes out
+  unchanged.
+- `fuseToken` is implemented; it threw "Token fusion not yet implemented". The new
+  `Molecule.fuseToken` builds `V(S, -B)`, `V(burn, +(M-1))`, `F(recipient, +1)`,
+  `V(remainder, +(B-M))` with no ContinuID atom: atom 0 carries the fused units, the burn atom
+  every fused unit but the last, the F atom the new unit whose `fusedTokenUnits` meta lists the
+  fused units in caller order, and the remainder the units that stay. Fewer than two units, an
+  id the source does not hold, or a new id the source already holds throw
+  `TransferBalanceException`. Validated by the `stackable_fusion_conservation` vectors.
+- `withdrawBufferToken` signs from the buffer wallet (`Balance` with `type: 'buffer'`) and sends
+  the change to a fresh position of it. It signed from the USER ContinuID wallet and never gave
+  the molecule its buffer source, so the B atoms debited the USER wallet. Validated by the
+  `buffer_withdraw_fresh_remainder` vectors in `tests/unit/buffer-conservation.test.ts`; a
+  string `amount` is now summed as a number.
+- `claimShadowWallet` chooses among shadow wallets only, as the JS SDK does. It took the first
+  wallet `queryWallets({ token })` listed and threw "Wallet is not a shadow wallet" when that was
+  the identity's regular wallet; with no shadow wallet it now throws
+  `WalletShadowException('No shadow wallets found')`.
+- Token units reach the hashed `tokenUnits` meta as `[id, name, metas]` triples, as the JS SDK
+  emits them (`Wallet.getTokenUnitsData` returns `TokenUnit.toData()`). They were serialised as
+  `{id, name, metas}` objects, so every stackable molecule hashed to different bytes than JS.
+- `QueryBalance` and `QueryWalletList` now always read from the network
+  (`requestPolicy: 'network-only'`, as `QueryContinuId` already did), so the reads that choose the
+  wallet to spend no longer come from urql's in-memory cache. `querySourceWallet` (behind
+  `transferToken`, `transferTokens`, `burnTokens` and `depositBufferToken`) and `replenishToken`
+  take their wallet from `Balance`, and `claimShadowWallet(s)` take the wallet to claim
+  from `Wallet`. A long-lived client answered a repeated `Balance` query from the cache, so a
+  second spend of a token in one session signed with the pre-transfer wallet the first spend had
+  already consumed, and the validator rejected it with "OTS key reuse rejected (NIST SP 800-208)".
+  `tests/unit/KnishIOClient-balance-cache.test.ts` drives the real urql client with a stubbed
+  fetch.
+
 ## [1.3.0] — 2026-09-26
 
 ### Changed
@@ -590,7 +651,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.3.0...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.3.1...HEAD
+[1.3.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.1
 [1.3.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.0
 [1.2.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.2.1
 [1.2.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.2.0
