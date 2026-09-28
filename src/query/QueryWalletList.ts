@@ -95,6 +95,14 @@ export default class QueryWalletList extends Query {
   }
 
   /**
+   * Force network-only for wallet list queries: claimShadowWallet(s) pick the wallet to claim from
+   * this result, and a cached answer would still list a shadow wallet that was already claimed
+   */
+  override createQueryContext(): Record<string, unknown> {
+    return { requestPolicy: 'network-only' }
+  }
+
+  /**
    * Builds a Response object out of a JSON object
    * Matches JavaScript SDK createResponse method exactly
    */

@@ -91,6 +91,15 @@ export default class QueryBalance extends Query {
   }
 
   /**
+   * Force network-only for Balance queries: querySourceWallet and replenishToken pick the wallet
+   * to sign with from this result, and a cached answer would still name the wallet the previous
+   * spend consumed (its one-time key is then rejected as reused)
+   */
+  override createQueryContext(): Record<string, unknown> {
+    return { requestPolicy: 'network-only' }
+  }
+
+  /**
    * Create ResponseBalance instance from JSON data
    * Matches JavaScript SDK createResponse method signature exactly
    */
