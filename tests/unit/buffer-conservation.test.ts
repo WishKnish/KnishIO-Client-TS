@@ -1,7 +1,7 @@
 /**
  * Buffer-family conservation — verifies the TS SDK against the shared
- * canonical-patent-vectors.json (buffer_deposit_conservation +
- * buffer_withdraw_conservation). Sibling of the family's buffer-conservation
+ * canonical-patent-vectors.json (buffer_deposit_conservation, buffer_withdraw_conservation
+ * and buffer_withdraw_fresh_remainder). Sibling of the family's buffer-conservation
  * tests (JS patent-vectors.test.js, PHP/Kotlin PatentVectorValidationTest,
  * Rust/Python patent_vector tests). TS's initDepositBuffer/initWithdrawBuffer
  * already debit the FULL source balance (-Number(balance)); this regression-locks
@@ -46,6 +46,19 @@ type BufferVectors = {
         expectedRecipientValue: string
         expectedRemainderValue: string
         expectedSum: string
+      }>
+    }
+    buffer_withdraw_fresh_remainder: {
+      tests: Array<{
+        name: string
+        sourceBalance: number
+        amount: number
+        expectedIsotopes: string[]
+        expectedSourceValue: string
+        expectedRecipientValue: string
+        expectedRemainderValue: string
+        expectedSum: string
+        expectedRemainderPositionDistinctFromSource: boolean
       }>
     }
   }
@@ -102,6 +115,40 @@ if (!fixture) {
         expect(bAtoms[0].value).toBe(vector.expectedSourceValue)
         expect(vAtom?.value).toBe(vector.expectedRecipientValue)
         expect(bAtoms[1].value).toBe(vector.expectedRemainderValue)
+      },
+    )
+  })
+
+  describe('buffer_withdraw_fresh_remainder', () => {
+    it.each(vectors.buffer_withdraw_fresh_remainder.tests)(
+      'withdraw $name: buffer source, change to a fresh position, passes check()',
+      (vector) => {
+        // The client wrapper's shape: the buffer wallet signs, its change goes to createRemainder()
+        const bufferWallet = Wallet.create({ secret: BUF_SECRET, token: 'BUFTOK' })
+        bufferWallet.balance = String(vector.sourceBalance)
+        const mol = new Molecule({
+          secret: BUF_SECRET,
+          bundle: bufferWallet.bundle,
+          sourceWallet: bufferWallet,
+          remainderWallet: bufferWallet.createRemainder(BUF_SECRET),
+          cellSlug: 'buftest'
+        })
+        mol.initWithdrawBuffer({ recipients: { [bufferWallet.bundle!]: vector.amount } })
+        mol.sign({})
+        expect(mol.check(bufferWallet)).toBe(true)
+
+        expect(mol.atoms.map((a) => a.isotope)).toEqual(vector.expectedIsotopes)
+        const [source, recipient, remainder] = mol.atoms
+        expect(source.value).toBe(vector.expectedSourceValue)
+        expect(source.position).toBe(bufferWallet.position)
+        expect(recipient.value).toBe(vector.expectedRecipientValue)
+        expect([recipient.walletAddress, recipient.metaType, recipient.metaId]).toEqual([null, 'walletBundle', bufferWallet.bundle])
+        expect(remainder.value).toBe(vector.expectedRemainderValue)
+        expect(remainder.position !== source.position).toBe(vector.expectedRemainderPositionDistinctFromSource)
+        expect(remainder.walletAddress).not.toBe(source.walletAddress)
+
+        const sum = mol.atoms.reduce((s, a) => s + BigInt(a.value ?? '0'), 0n)
+        expect(sum.toString()).toBe(vector.expectedSum)
       },
     )
   })

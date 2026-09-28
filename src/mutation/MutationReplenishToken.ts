@@ -17,7 +17,7 @@ import MutationProposeMolecule from './MutationProposeMolecule'
  * `ProposeMolecule(molecule: $molecule)` document from the base, so the request on the wire is
  * the same one the JS SDK sends.
  *
- * `fillMolecule` is intentionally a no-op: KnishIOClient.replenishToken builds the V-atom pair
+ * `fillMolecule` is intentionally a no-op: KnishIOClient.replenishToken builds the C + I atoms
  * via Molecule.replenishToken, then signs and checks the molecule, before this mutation is
  * constructed. There is nothing left to fill.
  */

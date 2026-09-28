@@ -1137,7 +1137,7 @@ export default class KnishIOClient {
   }: {
     token: TokenSlug | string
     bundle?: BundleHash | string | null
-    type?: 'regular' | 'stackable'
+    type?: 'regular' | 'stackable' | 'buffer'
   }): Promise<Response> {
     const query = this.createQuery(QueryBalance)
     
@@ -1158,7 +1158,7 @@ export default class KnishIOClient {
   }: {
     token: TokenSlug | string
     amount: number | string
-    type?: 'regular' | 'stackable'
+    type?: 'regular' | 'stackable' | 'buffer'
   }): Promise<Wallet> {
     const response = await this.queryBalance({
       token,
@@ -1930,8 +1930,16 @@ export default class KnishIOClient {
   }
 
   /**
-   * Replenish a non-finite token supply.
-   * Matches JS SDK KnishIOClient.replenishToken (KnishIOClient.js:2195-2231).
+   * Replenish the supply of a token this identity created (supply `infinite` or `replenishable`).
+   *
+   * Builds the contract 9.1 molecule — a C atom (meta action = add) signed by the USER wallet,
+   * then the ContinuID atom — crediting the identity's existing wallet for the token, or a new
+   * one when it holds none.
+   *
+   * @param token - token slug
+   * @param amount - fungible amount (must be positive)
+   * @param units - new stackable / non-fungible units as [id, name, metas?]
+   * @param sourceWallet - the token wallet to credit; defaults to the queried Balance wallet
    */
   async replenishToken({
     token,
@@ -1946,22 +1954,19 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::replenishToken() - Replenishing ${amount || 'units'} of ${token}...`)
 
-    if (!sourceWallet) {
-      sourceWallet = (await this.queryBalance({ token }))?.payload() as Wallet | null
-    }
-    if (!sourceWallet) {
-      throw new TransferBalanceException('Source wallet is missing or invalid.')
+    let creditedWallet = sourceWallet ?? (await this.queryBalance({ token }))?.payload() as Wallet | null
+    if (!creditedWallet || creditedWallet.isShadow()) {
+      creditedWallet = Wallet.create({
+        secret: this.getSecret(),
+        token,
+        mlKemParameterSet: this.getMlKemParameterSet()
+      })
     }
 
-    // Remainder wallet (same token, so the V-isotope pair conserves)
-    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
-
-    const molecule = await this.createMolecule({
-      sourceWallet,
-      remainderWallet
-    })
+    const molecule = await this.createMolecule({})
     molecule.replenishToken({
-      amount: Number(amount ?? 0),
+      creditedWallet,
+      amount: amount === null ? null : Number(amount),
       units: units ?? []
     })
     molecule.sign({ bundle: this.getBundle() })
@@ -1982,14 +1987,20 @@ export default class KnishIOClient {
   }
 
   /**
-   * Fuse token units
+   * Fuse two or more units of a stackable token into one new unit (contract 9.2).
+   *
+   * @param bundleHash - bundle receiving the new unit (own bundle or another identity's)
+   * @param tokenSlug - stackable token slug
+   * @param newTokenUnit - id (and name) of the new unit
+   * @param fusedTokenUnitIds - ids of the source wallet's units to fuse (at least two)
+   * @param sourceWallet - wallet holding the units; defaults to the queried Balance wallet
    */
   async fuseToken({
-    bundleHash: _bundleHash,
+    bundleHash,
     tokenSlug,
-    newTokenUnit: _newTokenUnit,
-    fusedTokenUnitIds: _fusedTokenUnitIds,
-    sourceWallet: _sourceWallet = null
+    newTokenUnit,
+    fusedTokenUnitIds,
+    sourceWallet = null
   }: {
     bundleHash: BundleHash | string
     tokenSlug: TokenSlug | string
@@ -1999,9 +2010,37 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::fuseToken() - Fusing token units for ${tokenSlug}...`)
 
-    // This would require a specific mutation for token fusion
-    // For now, return a placeholder
-    throw new CodeException('Token fusion not yet implemented')
+    if (!sourceWallet) {
+      sourceWallet = (await this.queryBalance({ token: tokenSlug }))?.payload() as Wallet | null
+    }
+    if (!sourceWallet || sourceWallet.isShadow()) {
+      throw new TransferBalanceException('Source wallet is missing or invalid.')
+    }
+
+    const recipientWallet = bundleHash === this.getBundle()
+      ? Wallet.create({ secret: this.getSecret(), token: tokenSlug, mlKemParameterSet: this.getMlKemParameterSet() })
+      : Wallet.create({ bundle: bundleHash, token: tokenSlug, mlKemParameterSet: this.getMlKemParameterSet() })
+
+    const molecule = await this.createMolecule({
+      sourceWallet,
+      remainderWallet: sourceWallet.createRemainder(this.getSecret())
+    })
+    molecule.fuseToken({ fusedTokenUnitIds, newTokenUnit, recipientWallet })
+    molecule.sign({ bundle: this.getBundle() })
+    molecule.check(sourceWallet)
+
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationProposeMolecule,
+      molecule
+    })
+
+    const response = await this.executeQuery(mutation)
+
+    if (!response) {
+      throw new CodeException('Token fusion failed')
+    }
+
+    return response
   }
 
   // =============================================================================
@@ -2056,24 +2095,20 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::claimShadowWallet() - Claiming shadow wallet for token ${token}...`)
 
-    // Get shadow wallets
-    const shadowWallets = await this.queryWallets({ token })
-    
-    if (!shadowWallets || shadowWallets.length === 0) {
+    // Only shadow wallets are claimable: queryWallets also lists the identity's regular wallets
+    const shadowWallets = (await this.queryWallets({ token })).filter(wallet => wallet.isShadow())
+
+    if (shadowWallets.length === 0) {
       throw new WalletShadowException('No shadow wallets found')
     }
 
     // Find the shadow wallet with matching batchId
-    const shadowWallet = batchId 
+    const shadowWallet = batchId
       ? shadowWallets.find(w => w.batchId === batchId)
       : shadowWallets[0]
 
     if (!shadowWallet) {
       throw new WalletShadowException('Shadow wallet not found')
-    }
-
-    if (!shadowWallet.isShadow()) {
-      throw new WalletShadowException('Wallet is not a shadow wallet')
     }
 
     // Create the molecule mutation
@@ -2434,7 +2469,12 @@ export default class KnishIOClient {
   }
 
   /**
-   * Withdraw buffer tokens
+   * Withdraw buffer tokens to this identity's own bundle (contract 9.6)
+   *
+   * Signs from the buffer wallet itself (Balance type `buffer`) and sends the change to a fresh
+   * position of it, never back to the consumed signing position.
+   *
+   * @param sourceWallet - the buffer wallet to debit; defaults to the queried buffer Balance wallet
    */
   async withdrawBufferToken({
     tokenSlug,
@@ -2447,18 +2487,29 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::withdrawBufferToken() - Withdrawing ${amount} of ${tokenSlug} from buffer...`)
 
-    // Get source wallet if not provided
+    const amountNum = Number(amount)
+
     if (!sourceWallet) {
-      sourceWallet = await this.getSourceWallet()
+      sourceWallet = await this.querySourceWallet({
+        token: tokenSlug,
+        amount: amountNum,
+        type: 'buffer'
+      })
+    } else if (Decimal.cmp(Number(sourceWallet.balance), amountNum) < 0) {
+      throw new TransferBalanceException()
     }
 
-    // Create the molecule mutation
-    const mutation = await this.createMoleculeMutation({ mutationClass: MutationWithdrawBufferToken })
+    const molecule = await this.createMolecule({
+      sourceWallet,
+      remainderWallet: sourceWallet.createRemainder(this.getSecret())
+    })
 
-    // Initialize the withdraw buffer token mutation
-    const recipients: Record<string, any> = {}
-    recipients[this.getBundle()] = amount
-    await mutation.fillMolecule({ recipients })
+    const mutation = await this.createMoleculeMutation({
+      mutationClass: MutationWithdrawBufferToken,
+      molecule
+    })
+
+    await mutation.fillMolecule({ recipients: { [this.getBundle()]: amountNum } })
 
     // Execute the mutation
     const response = await this.executeQuery(mutation)

@@ -408,11 +408,11 @@ export default class Wallet {
   }
 
   /**
-   * Get token units data
-   * Stub for compatibility
+   * Token units as `[id, name, metas]` triples — the shape AtomMeta.setAtomWallet serialises into
+   * the hashed `tokenUnits` meta. Matches JS SDK Wallet.getTokenUnitsData (Wallet.js:437-443).
    */
-  getTokenUnitsData(): any[] {
-    return this.tokenUnits
+  getTokenUnitsData(): Array<[string, string, Record<string, any>]> {
+    return this.tokenUnits.map(tokenUnit => tokenUnit.toData())
   }
 
   /**

@@ -49,6 +49,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import Atom from './Atom'
 import AtomMeta from './AtomMeta'
 import Wallet from './Wallet'
+import TokenUnit from './TokenUnit'
 import Rule from '@/instance/rules/Rule'
 import CheckMolecule from '@/libraries/CheckMolecule'
 import { chunkSubstr, hexToBase64 } from '@/libraries/strings'
@@ -58,7 +59,9 @@ import {
   AtomsMissingException,
   BalanceInsufficientException,
   NegativeAmountException,
-  SignatureMalformedException
+  SignatureMalformedException,
+  StackableUnitAmountException,
+  TransferBalanceException
 } from '@/exception'
 import type { AtomIsotope } from '@/types'
 
@@ -746,59 +749,164 @@ export default class Molecule {
   }
 
   /**
-   * Replenishes non-finite token supplies.
-   * Matches JS SDK Molecule.replenishToken (Molecule.js:521-566) exactly.
+   * Replenishes the supply of an existing token (contract 9.1): a C atom signed by this
+   * molecule's USER source wallet (exactly like initTokenCreation), crediting `creditedWallet`,
+   * followed by the ContinuID atom. The historical V(+amount) V(+balance+amount) pair is gone:
+   * it minted value inside a V-only molecule, which every CheckMolecule rejects as unbalanced.
    *
-   * Two orderings here are load-bearing for the molecular hash and must not be reordered:
-   * the remainder balance is computed BEFORE the source balance is overwritten, and the
-   * source V-atom is added BEFORE the remainder V-atom.
+   * Metas, in order: action = add; the credited wallet's address, position, pubkey; its batchId
+   * only when it has one; tokenUnits (the new units as [id, name, metas] triples) only for a
+   * stackable / non-fungible replenish. The atom value is the amount, or the new unit count.
+   *
+   * @param creditedWallet - the identity's existing wallet for the token, or a new one
+   * @param amount - fungible amount; with units it must be null or equal to the unit count
+   * @param units - new stackable / non-fungible units
    */
   replenishToken({
-    amount,
+    creditedWallet,
+    amount = null,
     units = []
   }: {
-    amount: number
+    creditedWallet: Wallet
+    amount?: number | null
     units?: Array<[string, string, Record<string, any>?]>
   }): Molecule {
-    if (amount < 0) {
-      throw new NegativeAmountException('Molecule::replenishToken() - Amount to replenish must be positive!')
+    if (!this.sourceWallet) {
+      throw new Error('Source wallet required for token replenishment')
     }
 
-    if (!this.sourceWallet || !this.remainderWallet) {
-      throw new Error('Source and remainder wallets required for token replenishment')
-    }
-
+    let value: number
     if (units.length) {
-      // Prepare token units to formatted style
-      const formatted = Wallet.getTokenUnits(units)
-
-      // Merge token units with source wallet & new items
-      this.remainderWallet.tokenUnits = this.sourceWallet.tokenUnits
-      for (const unit of formatted) {
-        this.remainderWallet.tokenUnits.push(unit)
+      if (amount !== null && amount !== units.length) {
+        throw new StackableUnitAmountException()
       }
-      this.remainderWallet.balance = String(this.remainderWallet.tokenUnits.length)
-
-      // Override first atom's token units to replenish values
-      this.sourceWallet.tokenUnits = formatted
-      this.sourceWallet.balance = String(this.sourceWallet.tokenUnits.length)
+      value = units.length
     } else {
-      // Update wallet's balances
-      this.remainderWallet.balance = String(Number(this.sourceWallet.balance) + amount)
-      this.sourceWallet.balance = String(amount)
+      // A wallet that holds units belongs to a stackable token: its supply is its unit list
+      if (creditedWallet.tokenUnits.length) {
+        throw new StackableUnitAmountException()
+      }
+      if (amount === null || !(amount > 0)) {
+        throw new NegativeAmountException('Molecule::replenishToken() - Amount to replenish must be positive!')
+      }
+      value = amount
     }
 
-    // Initializing a new Atom to remove tokens from source
+    const meta: Record<string, any> = {
+      action: 'add',
+      address: creditedWallet.address,
+      position: creditedWallet.position,
+      pubkey: creditedWallet.pubkey
+    }
+    if (creditedWallet.batchId) {
+      meta.batchId = creditedWallet.batchId
+    }
+    if (units.length) {
+      meta.tokenUnits = JSON.stringify(Wallet.getTokenUnits(units).map(unit => unit.toData()))
+    }
+
     this.addAtom(Atom.create({
-      isotope: 'V',
+      isotope: 'C',
       wallet: this.sourceWallet,
-      value: Number(this.sourceWallet.balance)
+      value,
+      metaType: 'token',
+      metaId: creditedWallet.token,
+      meta: new AtomMeta(meta),
+      batchId: creditedWallet.batchId
     }))
 
+    this.addContinuIdAtom()
+
+    return this
+  }
+
+  /**
+   * Fuses stackable token units (contract 9.2): the M units `fusedTokenUnitIds` (M >= 2) of this
+   * molecule's source wallet S (balance B) become one new unit N delivered to `recipientWallet`.
+   *
+   * Atoms, in order: V S -B carrying the fused units (S order); V burn +(M-1) carrying the fused
+   * units except the last (caller order); F recipient +1 carrying N, whose metas.fusedTokenUnits
+   * lists every fused unit as a triple (caller order); V remainder +(B-M) carrying S's other
+   * units. No ContinuID atom: like a transfer it is signed by S at its own position. When S has a
+   * batch id, the burn and F atoms each get a fresh one and the remainder keeps S's.
+   *
+   * @param fusedTokenUnitIds - ids of S's units to fuse, caller order
+   * @param newTokenUnit - id (and name) of the new unit N
+   * @param recipientWallet - wallet receiving N
+   */
+  fuseToken({
+    fusedTokenUnitIds,
+    newTokenUnit,
+    recipientWallet
+  }: {
+    fusedTokenUnitIds: string[]
+    newTokenUnit: string
+    recipientWallet: Wallet
+  }): Molecule {
+    if (!this.sourceWallet || !this.remainderWallet) {
+      throw new Error('Source and remainder wallets required for token fusion')
+    }
+    const sourceWallet = this.sourceWallet
+    const balance = Number(sourceWallet.balance)
+    const count = fusedTokenUnitIds.length
+
+    if (count < 2) {
+      throw new TransferBalanceException('Token fusion requires at least two token units')
+    }
+    const sourceUnits = sourceWallet.tokenUnits as TokenUnit[]
+    const fusedUnits = fusedTokenUnitIds.map(id => {
+      const unit = sourceUnits.find(tokenUnit => tokenUnit.id === id)
+      if (!unit) {
+        throw new TransferBalanceException(`Fused token unit ID = ${id} does not found in the source wallet.`)
+      }
+      return unit
+    })
+    if (sourceUnits.some(tokenUnit => tokenUnit.id === newTokenUnit)) {
+      throw new TransferBalanceException('Token fusion unit id already exists in the source wallet')
+    }
+    if (balance < count) {
+      throw new BalanceInsufficientException()
+    }
+
+    const burnWallet = new Wallet({
+      bundle: '0000000000000000000000000000000000000000000000000000000000000000',
+      token: sourceWallet.token,
+      mlKemParameterSet: this.mlKemParameterSet
+    })
+    burnWallet.initBatchId({ sourceWallet })
+    burnWallet.tokenUnits = fusedUnits.slice(0, -1)
+
+    recipientWallet.initBatchId({ sourceWallet })
+    recipientWallet.tokenUnits = [new TokenUnit(newTokenUnit, newTokenUnit, {
+      fusedTokenUnits: fusedUnits.map(unit => unit.toData())
+    })]
+
+    // Source keeps the SENT (fused) units, the remainder the KEPT ones, both in S order
+    sourceWallet.splitUnits(fusedTokenUnitIds, this.remainderWallet)
+
+    this.addAtom(Atom.create({
+      isotope: 'V',
+      wallet: sourceWallet,
+      value: -balance
+    }))
+    this.addAtom(Atom.create({
+      isotope: 'V',
+      wallet: burnWallet,
+      value: count - 1,
+      metaType: 'walletBundle',
+      metaId: burnWallet.bundle!
+    }))
+    this.addAtom(Atom.create({
+      isotope: 'F',
+      wallet: recipientWallet,
+      value: 1,
+      metaType: 'walletBundle',
+      metaId: recipientWallet.bundle!
+    }))
     this.addAtom(Atom.create({
       isotope: 'V',
       wallet: this.remainderWallet,
-      value: Number(this.remainderWallet.balance),
+      value: balance - count,
       metaType: 'walletBundle',
       metaId: this.remainderWallet.bundle!
     }))
@@ -1271,8 +1379,12 @@ export default class Molecule {
   }
 
   /**
-   * Initialize a withdraw buffer operation (B-isotope)
-   * Matches JavaScript SDK Molecule.initWithdrawBuffer implementation exactly
+   * Initialize a withdraw buffer operation (B-isotope, contract 9.6)
+   *
+   * The source wallet must be the buffer wallet itself (Balance type `buffer`), and the remainder
+   * wallet a FRESH position of it (`sourceWallet.createRemainder(secret)`): a remainder at the
+   * signing position would be credited behind a consumed one-time key, which validator 0.6.1
+   * rejects. The remainder B atom is emitted even when its value is 0.
    *
    * @param recipients - Map of recipientBundle → amount
    * @return This molecule instance for chaining
