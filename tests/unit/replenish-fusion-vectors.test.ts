@@ -1,12 +1,15 @@
 /**
- * Token replenish (contract 9.1) and stackable fusion (contract 9.2) — verifies the TS SDK against
- * the shared canonical-patent-vectors.json (token_replenish + stackable_fusion_conservation).
+ * Token replenish (contract 9.1), stackable fusion (contract 9.2) and createToken units — verifies
+ * the TS SDK against the shared canonical-patent-vectors.json (token_replenish +
+ * stackable_fusion_conservation + create_token_units).
  * Siblings: JS patent-vectors.test.js, PHP/Kotlin PatentVectorValidationTest, Python/Rust
  * patent_vector tests, C/C++ self-tests.
  *
  * Replenish emits C (signed by the USER wallet; action = add; the credited wallet's address,
  * position, pubkey) then the I ContinuID atom. Fusion emits V(S -B) V(burn +(M-1)) F(+1) V(+(B-M))
- * with no I atom. Every built molecule must also pass the SDK's own check().
+ * with no I atom. createToken with units sends the C atom meta tokenUnits as compact
+ * [id, name, metas] triples; it is driven through the public client over a stubbed transport.
+ * Every built molecule must also pass the SDK's own check().
  *
  * Standalone-CI note: the monorepo-parent master is ABSENT in a standalone GitHub checkout. The
  * fixture is read at runtime; when it is missing this file registers one skipped test naming the
@@ -15,9 +18,11 @@
 
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import KnishIOClient from '../../src/KnishIOClient'
 import Atom from '../../src/core/Atom'
 import Molecule from '../../src/core/Molecule'
+import TokenUnit from '../../src/core/TokenUnit'
 import Wallet from '../../src/core/Wallet'
 import { NegativeAmountException, StackableUnitAmountException, TransferBalanceException } from '../../src/exception'
 
@@ -56,10 +61,22 @@ type FusionVector = {
   expectedSum?: string
 }
 
+type CreateTokenUnitsVector = {
+  name: string
+  token: string
+  units: string[]
+  expectedCValue: string
+  expectedMetaType: string
+  expectedMetaId: string
+  expectedTokenUnits: string
+  expectedTokenUnitIds: string[]
+}
+
 type Vectors = {
   vectors: {
     token_replenish: { tests: ReplenishVector[] }
     stackable_fusion_conservation: { tests: FusionVector[] }
+    create_token_units: { tests: CreateTokenUnitsVector[] }
   }
 }
 
@@ -81,6 +98,48 @@ const stackableSource = (ids: string[], batchId: string | null = null): Wallet =
   source.tokenUnits = Wallet.getTokenUnits(ids.map(id => [id, id, {}]))
   source.balance = String(ids.length)
   return source
+}
+
+const CONTINUID_POSITION = 'c0ffee0000000000c0ffee0000000000c0ffee0000000000c0ffee0000000000'
+
+/**
+ * A client whose GraphQL transport is stubbed (ContinuID query + accepted ProposeMolecule), so the
+ * public createToken builds, signs and "sends" its molecule offline. Returns the token-creation
+ * molecule, after asserting it was proposed exactly once.
+ */
+const createTokenOffline = async (params: Parameters<KnishIOClient['createToken']>[0]): Promise<Molecule> => {
+  const client = new KnishIOClient({ uri: 'https://test.local/graphql', cellSlug: 'vectors', logging: false })
+  client.setSecret(SECRET)
+  const pointer = new Wallet({ secret: SECRET, token: 'USER', position: CONTINUID_POSITION })
+  const transport = client.client()
+  const mutate = vi.spyOn(transport, 'mutate').mockResolvedValue({
+    data: { ProposeMolecule: { molecularHash: 'stub', status: 'accepted', reason: null, payload: null } }
+  })
+  vi.spyOn(transport, 'query').mockResolvedValue({
+    data: {
+      ContinuId: {
+        address: pointer.address,
+        bundleHash: client.getBundle(),
+        tokenSlug: 'USER',
+        position: CONTINUID_POSITION,
+        batchId: null,
+        characters: null,
+        pubkey: null,
+        amount: 0
+      }
+    }
+  })
+  const initTokenCreation = vi.spyOn(Molecule.prototype, 'initTokenCreation')
+
+  await client.createToken(params)
+
+  expect(initTokenCreation).toHaveBeenCalledTimes(1)
+  expect(mutate).toHaveBeenCalledTimes(1)
+  const molecule = initTokenCreation.mock.contexts[0]
+  if (!(molecule instanceof Molecule)) {
+    throw new Error('createToken did not build its molecule through Molecule.initTokenCreation')
+  }
+  return molecule
 }
 
 if (!fixture) {
@@ -222,6 +281,44 @@ if (!fixture) {
         .toThrow(TransferBalanceException)
       expect(() => build().fuseToken({ fusedTokenUnitIds: ['U1', 'U2'], newTokenUnit: 'U3', recipientWallet: recipient }))
         .toThrow('Token fusion unit id already exists in the source wallet')
+    })
+  })
+
+  describe('create_token_units', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it.each(vectors.create_token_units.tests)('createToken $name: C atom tokenUnits are [id, name, metas] triples', async (vector) => {
+      const molecule = await createTokenOffline({
+        token: vector.token,
+        amount: null,
+        meta: { fungibility: 'stackable' },
+        units: vector.units
+      })
+      expect(molecule.check()).toBe(true)
+
+      const cAtom = molecule.atoms[0]!
+      expect(cAtom.isotope).toBe('C')
+      expect(cAtom.value).toBe(vector.expectedCValue)
+      expect(cAtom.metaType).toBe(vector.expectedMetaType)
+      expect(cAtom.metaId).toBe(vector.expectedMetaId)
+      // Byte-exact cross-SDK form: the same literal in all eight SDKs
+      expect(cAtom.aggregatedMeta().tokenUnits).toBe(vector.expectedTokenUnits)
+      expect(unitIds(cAtom)).toEqual(vector.expectedTokenUnitIds)
+    })
+
+    it('keeps a triple or TokenUnit input\'s own name and metas, in caller order', async () => {
+      const molecule = await createTokenOffline({
+        token: 'CRTTRI',
+        meta: { fungibility: 'stackable' },
+        units: [['X1', 'Name X', { k: 'v' }], ['X2'], new TokenUnit('X3', 'Name 3')]
+      })
+      expect(molecule.check()).toBe(true)
+
+      const cAtom = molecule.atoms[0]!
+      expect(cAtom.value).toBe('3')
+      expect(cAtom.aggregatedMeta().tokenUnits).toBe('[["X1","Name X",{"k":"v"}],["X2","X2",{}],["X3","Name 3",{}]]')
     })
   })
 }

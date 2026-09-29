@@ -55,6 +55,7 @@ import {
 } from '@/libraries/crypto'
 import Molecule from '@/core/Molecule'
 import Wallet from '@/core/Wallet'
+import TokenUnit from '@/core/TokenUnit'
 import AuthToken from '@/AuthToken'
 import Query from '@/query/Query'
 import Mutation from '@/mutation/Mutation'
@@ -1753,6 +1754,9 @@ export default class KnishIOClient {
 
   /**
    * Create a new token
+   *
+   * @param units - initial stackable / non-fungible units: a bare id (sent as [id, id, {}]), an
+   *   [id, name?, metas?] triple, or a TokenUnit; the unit count is the supply
    */
   async createToken({
     token,
@@ -1765,7 +1769,7 @@ export default class KnishIOClient {
     amount?: number | string | null
     meta?: Record<string, any> | null
     batchId?: BatchId | string | null
-    units?: string[] | null
+    units?: Array<string | [string, string?, Record<string, any>?] | TokenUnit> | null
   }): Promise<Response> {
     this.log('info', `KnishIOClient::createToken() - Creating token ${token}...`)
 
@@ -1793,7 +1797,16 @@ export default class KnishIOClient {
       resolvedAmount = units.length
       tokenMeta.splittable = '1'
       tokenMeta.decimals = '0'
-      tokenMeta.tokenUnits = JSON.stringify(units)
+      // Compact [id, name, metas] triples, the form every other unit operation sends
+      tokenMeta.tokenUnits = JSON.stringify(units.map(unit => {
+        if (typeof unit === 'string') {
+          return new TokenUnit(unit, unit, {}).toData()
+        }
+        if (Array.isArray(unit)) {
+          return new TokenUnit(unit[0], unit[1] ?? unit[0], unit[2] || {}).toData()
+        }
+        return unit.toData()
+      }))
     }
 
     // Create the molecule mutation
