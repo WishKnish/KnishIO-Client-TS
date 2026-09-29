@@ -15,6 +15,13 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.3.2] — 2026-09-29
+
+### Fixed
+
+- createToken sends tokenUnits as [id, name, metas] triples (a bare id becomes [id, id, {}]), the
+  form every other unit operation already uses; pinned by the create_token_units vector.
+
 ## [1.3.1] — 2026-09-28
 
 ### Added
@@ -651,7 +658,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.3.1...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.3.2...HEAD
+[1.3.2]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.2
 [1.3.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.1
 [1.3.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.0
 [1.2.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.2.1
