@@ -142,8 +142,56 @@ const createTokenOffline = async (params: Parameters<KnishIOClient['createToken'
   return molecule
 }
 
+/**
+ * Frozen copy of vectors.create_token_units.tests. A standalone checkout (TS CI) has no
+ * ../shared-test-results, so these cases run from this copy; in the monorepo the copy is pinned
+ * equal to the master below, so it cannot drift.
+ */
+const CREATE_TOKEN_UNITS_TESTS: CreateTokenUnitsVector[] = [
+  { name: 'ids_to_triples', token: 'CRTSTK', units: ['U1', 'U2', 'U3'], expectedCValue: '3', expectedMetaType: 'token', expectedMetaId: 'CRTSTK', expectedTokenUnits: '[["U1","U1",{}],["U2","U2",{}],["U3","U3",{}]]', expectedTokenUnitIds: ['U1', 'U2', 'U3'] },
+  { name: 'single_id', token: 'CRTONE', units: ['solo'], expectedCValue: '1', expectedMetaType: 'token', expectedMetaId: 'CRTONE', expectedTokenUnits: '[["solo","solo",{}]]', expectedTokenUnitIds: ['solo'] }
+]
+
+describe('create_token_units', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each(CREATE_TOKEN_UNITS_TESTS)('createToken $name: C atom tokenUnits are [id, name, metas] triples', async (vector) => {
+    const molecule = await createTokenOffline({
+      token: vector.token,
+      amount: null,
+      meta: { fungibility: 'stackable' },
+      units: vector.units
+    })
+    expect(molecule.check()).toBe(true)
+
+    const cAtom = molecule.atoms[0]!
+    expect(cAtom.isotope).toBe('C')
+    expect(cAtom.value).toBe(vector.expectedCValue)
+    expect(cAtom.metaType).toBe(vector.expectedMetaType)
+    expect(cAtom.metaId).toBe(vector.expectedMetaId)
+    // Byte-exact cross-SDK form: the same literal in all eight SDKs
+    expect(cAtom.aggregatedMeta().tokenUnits).toBe(vector.expectedTokenUnits)
+    expect(unitIds(cAtom)).toEqual(vector.expectedTokenUnitIds)
+  })
+
+  it('keeps a triple or TokenUnit input\'s own name and metas, in caller order', async () => {
+    const molecule = await createTokenOffline({
+      token: 'CRTTRI',
+      meta: { fungibility: 'stackable' },
+      units: [['X1', 'Name X', { k: 'v' }], ['X2'], new TokenUnit('X3', 'Name 3')]
+    })
+    expect(molecule.check()).toBe(true)
+
+    const cAtom = molecule.atoms[0]!
+    expect(cAtom.value).toBe('3')
+    expect(cAtom.aggregatedMeta().tokenUnits).toBe('[["X1","Name X",{"k":"v"}],["X2","X2",{}],["X3","Name 3",{}]]')
+  })
+})
+
 if (!fixture) {
-  it.skip('replenish-fusion-vectors.test.ts: skipped — ../shared-test-results/canonical-patent-vectors.json not found (standalone checkout)', () => {})
+  it.skip('replenish-fusion-vectors.test.ts: master-vector families skipped — ../shared-test-results/canonical-patent-vectors.json not found (standalone checkout); create_token_units runs from its frozen copy', () => {})
 } else {
   const vectors = fixture.vectors
 
@@ -284,41 +332,7 @@ if (!fixture) {
     })
   })
 
-  describe('create_token_units', () => {
-    afterEach(() => {
-      vi.restoreAllMocks()
-    })
-
-    it.each(vectors.create_token_units.tests)('createToken $name: C atom tokenUnits are [id, name, metas] triples', async (vector) => {
-      const molecule = await createTokenOffline({
-        token: vector.token,
-        amount: null,
-        meta: { fungibility: 'stackable' },
-        units: vector.units
-      })
-      expect(molecule.check()).toBe(true)
-
-      const cAtom = molecule.atoms[0]!
-      expect(cAtom.isotope).toBe('C')
-      expect(cAtom.value).toBe(vector.expectedCValue)
-      expect(cAtom.metaType).toBe(vector.expectedMetaType)
-      expect(cAtom.metaId).toBe(vector.expectedMetaId)
-      // Byte-exact cross-SDK form: the same literal in all eight SDKs
-      expect(cAtom.aggregatedMeta().tokenUnits).toBe(vector.expectedTokenUnits)
-      expect(unitIds(cAtom)).toEqual(vector.expectedTokenUnitIds)
-    })
-
-    it('keeps a triple or TokenUnit input\'s own name and metas, in caller order', async () => {
-      const molecule = await createTokenOffline({
-        token: 'CRTTRI',
-        meta: { fungibility: 'stackable' },
-        units: [['X1', 'Name X', { k: 'v' }], ['X2'], new TokenUnit('X3', 'Name 3')]
-      })
-      expect(molecule.check()).toBe(true)
-
-      const cAtom = molecule.atoms[0]!
-      expect(cAtom.value).toBe('3')
-      expect(cAtom.aggregatedMeta().tokenUnits).toBe('[["X1","Name X",{"k":"v"}],["X2","X2",{}],["X3","Name 3",{}]]')
-    })
+  it('create_token_units: the frozen copy above equals the master vectors', () => {
+    expect(vectors.create_token_units.tests).toEqual(CREATE_TOKEN_UNITS_TESTS)
   })
 }
