@@ -501,6 +501,17 @@ Master secrets are stored at rest in the cross-SDK AES-256-GCM envelope (PBKDF2-
 
 `hardwareBacked` is derived by the provider from the platform, never accepted from the caller; software providers always report `false`. A hardware provider refuses to store without a recovery passphrase unless `allowUnrecoverable` is set — the recovery envelope (`knishio:recovery:<bundleHash>`, `providerType: "webcrypto-aes-gcm"`) is *software* custody whose strength is bounded by that passphrase: enforce passphrase entropy or keep it on a second device.
 
+## Optional kcore backend
+
+When the application also installs `@wishknish/knishio-kcore` (the Node binding of the KnishIO Crypto Core), the SDK runs the WOTS+ wallet address, signing and verification chains and ML-KEM-1024/768 keygen, encapsulation and decapsulation in kcore. The SDK does not depend on the package; without it, or in a browser, the built-in implementation runs. Both give identical results: inputs kcore does not take (for example upper-case or non-hex signature text) always run the built-in code. Loading the package needs `process.getBuiltinModule` (Node.js 20.16+ or 22.3+).
+
+| Variable | Values | Effect |
+|---|---|---|
+| `KNISHIO_KCORE` | `auto` (default), `off`, `require` | `auto` uses kcore when it loads; `off` never loads it; `require` throws `KcoreUnavailable` on every kcore call when it does not load |
+| `KNISHIO_KCORE_MODULE` | module specifier or absolute directory | Loads kcore from there instead of `@wishknish/knishio-kcore` |
+
+Both are read once, on first use. `kcore.available()` and `kcore.backend()` (`'napi'`, `'wasm'` or `null`), exported from the package with `KcoreUnavailable`, report whether kcore loaded.
+
 ## Getting Help
 
 Knish.IO is under active development, and our team is ready to assist with integration questions. The best way to seek help is to stop by our [Telegram Support Channel](https://t.me/wishknish). You can also [send us a contact request](https://knish.io/contact) via our website.

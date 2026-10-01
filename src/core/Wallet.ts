@@ -49,6 +49,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import JsSHA from 'jssha'
 import { randomString, chunkSubstr, isHex } from '@/libraries/strings'
 import { generateBundleHash, generateSecret, shake256, generateBatchId } from '@/libraries/crypto'
+import * as kcore from '@/libraries/kcore'
 import WalletCredentialException from '@/exception/WalletCredentialException'
 import { isBundleHash } from '@/types'
 import TokenUnit from '@/core/TokenUnit'
@@ -56,8 +57,8 @@ import TokenUnit from '@/core/TokenUnit'
 import { ml_kem768, ml_kem1024 } from '@noble/post-quantum/ml-kem.js'
 
 const ML_KEM_PARAMS = {
-  1024: { kem: ml_kem1024, pkBytes: 1568, skBytes: 3168, ctBytes: 1568 },
-  768: { kem: ml_kem768, pkBytes: 1184, skBytes: 2400, ctBytes: 1088 }
+  1024: { set: 1024, kem: ml_kem1024, pkBytes: 1568, skBytes: 3168, ctBytes: 1568 },
+  768: { set: 768, kem: ml_kem768, pkBytes: 1184, skBytes: 2400, ctBytes: 1088 }
 } as const
 const DEFAULT_ML_KEM_PARAMETER_SET = 1024
 
@@ -247,6 +248,9 @@ export default class Wallet {
    * Matches JavaScript SDK Wallet.generateAddress exactly
    */
   static generateAddress(key: string): string {
+    const viaKcore = kcore.wotsAddress(key)
+    if (viaKcore !== null) return viaKcore
+
     // Subdivide private key into 16 fragments of 128 characters each
     const keyFragments = chunkSubstr(key, 128)
     
@@ -463,7 +467,7 @@ export default class Wallet {
       seed[i] = parseInt(seedHex.substr(i * 2, 2), 16)
     }
 
-    const { publicKey, secretKey } = params.kem.keygen(seed)
+    const { publicKey, secretKey } = kcore.mlkemKeypair(params.set, seed) ?? params.kem.keygen(seed)
     return {
       pubkey: this.serializeKey(publicKey),
       privkey: secretKey,
@@ -536,7 +540,7 @@ export default class Wallet {
         'upgrade the peer, or step this client back to the other parameter set.'
       )
     }
-    const { cipherText, sharedSecret } = params.kem.encapsulate(deserializedPubkey)
+    const { cipherText, sharedSecret } = kcore.mlkemEncaps(params.set, deserializedPubkey) ?? params.kem.encapsulate(deserializedPubkey)
     const encryptedMessage = await this.encryptWithSharedSecret(messageUint8, sharedSecret)
     return {
       cipherText: this.serializeKey(cipherText),
@@ -589,8 +593,10 @@ export default class Wallet {
 
     let sharedSecret
     try {
-      sharedSecret = params.kem.decapsulate(deserializedCipherText, decapsPrivkey)
+      sharedSecret = kcore.mlkemDecaps(params.set, deserializedCipherText, decapsPrivkey) ??
+        params.kem.decapsulate(deserializedCipherText, decapsPrivkey)
     } catch (e) {
+      if (e instanceof kcore.KcoreUnavailable) throw e
       console.error('Wallet::decryptMessage() - Decapsulation failed', e)
       console.info('Wallet::decryptMessage() - my public key', this.pubkey)
       return null

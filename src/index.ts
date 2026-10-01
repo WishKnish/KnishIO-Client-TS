@@ -301,6 +301,10 @@ export {
   constantTimeCompare
 } from './libraries/secureMemory'
 
+// Optional kcore backend (@wishknish/knishio-kcore): status and the KNISHIO_KCORE=require error
+export * as kcore from './libraries/kcore'
+export { KcoreUnavailable } from './libraries/kcore'
+
 export type {
   SecretStorageMetadata,
   EncryptedSecretPayload,

@@ -70,6 +70,7 @@ import Wallet from '@/core/Wallet'
 import Rule from '@/instance/rules/Rule'
 import { base64ToHex, chunkSubstr } from '@/libraries/strings'
 import { shake256 } from '@/libraries/crypto'
+import * as kcore from '@/libraries/kcore'
 import Molecule from '@/core/Molecule'
 
 // Type definitions for Molecule structure
@@ -719,20 +720,16 @@ export default class CheckMolecule {
     // Subdivide Kk into 16 segments of 256 bytes (128 characters) each
     const otsChunks = chunkSubstr(ots, 128)
 
-    let keyFragments = ''
-
-    for (const index in otsChunks) {
-      let workingChunk = otsChunks[index]
-      if (!workingChunk) continue
-      
-      const hashValue = normalizedHash[Number(index)] || 0
+    const keyFragments = kcore.chainsHex(ots, otsChunks.map((_, i) => 8 + (normalizedHash[i] || 0))) ?? otsChunks.map((chunk, index) => {
+      let workingChunk = chunk
+      const hashValue = normalizedHash[index] || 0
 
       for (let iterationCount = 0, condition = 8 + hashValue; iterationCount < condition; iterationCount++) {
         workingChunk = shake256(workingChunk, 512)
       }
 
-      keyFragments += workingChunk
-    }
+      return workingChunk
+    }).join('')
 
     // Absorb the hashed Kk into the sponge to receive the digest Dk
     const digest = shake256(keyFragments, 8192)

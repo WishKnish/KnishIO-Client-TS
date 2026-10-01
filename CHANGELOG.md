@@ -15,6 +15,21 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+### Added
+
+- Optional kcore backend: when the application installs `@wishknish/knishio-kcore`, the WOTS+
+  wallet address, signing and verification chains (`Wallet.generateAddress`,
+  `generateOTSSignature`, `verifyOTSSignature`, `CheckMolecule.ots`) and ML-KEM-1024/768 keygen,
+  encapsulation and decapsulation run in kcore. `KNISHIO_KCORE` = `auto` (default) | `off` |
+  `require` and `KNISHIO_KCORE_MODULE` control it. The package is not a dependency; without it the
+  built-in code runs, and inputs kcore does not take (non-lowercase-hex OTS text, wrong-length
+  ML-KEM inputs) always fall back, so results are identical either way. The package entry exports
+  `kcore` (`available()`, `backend()`) and `KcoreUnavailable`.
+
+### Changed
+
+- The CJS bundle is built with tsup `shims: true`, so `import.meta.url` works in `dist/index.cjs`.
+
 ## [1.3.2] — 2026-09-29
 
 ### Fixed

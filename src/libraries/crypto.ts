@@ -53,6 +53,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import JsSHA from 'jssha'
 import { randomString } from './strings'
+import * as kcore from './kcore'
 import type { 
   BundleHash,
   Position,
@@ -618,6 +619,9 @@ export function generateOTSSignature(privateKey: string, molecularHash: string):
     for (let i = 0; i < privateKey.length; i += CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE) {
       keyChunks.push(privateKey.substring(i, i + CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE))
     }
+
+    const viaKcore = kcore.chainsHex(privateKey, keyChunks.map((_, i) => 8 - (normalized[i] || 0)))
+    if (viaKcore !== null) return viaKcore
     
     // Step 3: Generate signature fragments
     let signatureFragments = ''
@@ -636,6 +640,7 @@ export function generateOTSSignature(privateKey: string, molecularHash: string):
     
     return signatureFragments
   } catch (error) {
+    if (error instanceof kcore.KcoreUnavailable) throw error
     throw new Error(`OTS signature generation failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
@@ -672,20 +677,17 @@ export function verifyOTSSignature(
       otsChunks.push(ots.substring(i, i + CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE))
     }
     
-    // Step 4: Process each chunk for verification
-    let keyFragments = ''
-    for (let index = 0; index < otsChunks.length; index++) {
-      let workingChunk = otsChunks[index]!
-
-      // Hash (8 + normalized[index]) times for verification
+    // Step 4: Process each chunk for verification: hash (8 + normalized[index]) times
+    const keyFragments = kcore.chainsHex(ots, otsChunks.map((_, i) => 8 + (normalized[i] || 0))) ?? otsChunks.map((chunk, index) => {
+      let workingChunk = chunk
       const iterations = 8 + (normalized[index] || 0)
       for (let j = 0; j < iterations; j++) {
         const sponge = new JsSHA('SHAKE256', 'TEXT')
         sponge.update(workingChunk)
         workingChunk = sponge.getHash('HEX', { outputLen: 512 }) // 512 bits
       }
-      keyFragments += workingChunk
-    }
+      return workingChunk
+    }).join('')
     
     // Step 5: Generate digest from reconstructed key fragments
     const digestSponge = new JsSHA('SHAKE256', 'TEXT')
@@ -700,6 +702,7 @@ export function verifyOTSSignature(
     // Step 7: Compare with expected signing address
     return reconstructedAddress.toLowerCase() === signingAddress.toLowerCase()
   } catch (error) {
+    if (error instanceof kcore.KcoreUnavailable) throw error
     return false
   }
 }

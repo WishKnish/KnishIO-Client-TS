@@ -11,6 +11,8 @@ export default defineConfig({
   splitting: false,
   treeshake: true,
   minify: process.env.NODE_ENV === 'production',
+  // import.meta.url for the CJS bundle (src/libraries/kcore.ts resolves the optional package with it)
+  shims: true,
   
   // Multiple output formats
   outExtension({ format }) {
