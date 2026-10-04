@@ -86,9 +86,11 @@ jobs:
           set -euo pipefail
           CUTOFF="$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)"
           # Named cooldown exception — see the identical block in ci.yml for the full rationale.
-          # zod@4.5.4, published 2026-08-29T17:55:42Z via npm Trusted Publishing (OIDC), SLSA v1
-          # provenance, zero runtime deps. SELF-EXPIRING after 2026-09-05T18:00Z.
-          FLOOR='2026-08-29T18:00:00Z'
+          # @wishknish/knishio-kcore@0.1.0 (first-party optionalDependency), published
+          # 2026-10-04T14:57:40Z. Without the floor the resolve drops it and npm ci then fails
+          # with "Missing: @wishknish/knishio-kcore@0.1.0 from lock file".
+          # SELF-EXPIRING after 2026-10-11T15:00Z.
+          FLOOR='2026-10-04T15:00:00Z'
           if [ "$CUTOFF" \< "$FLOOR" ]; then CUTOFF="$FLOOR"; fi
           echo "cooldown cutoff: $CUTOFF"
           npm install --package-lock-only --ignore-scripts --before="$CUTOFF"
@@ -143,9 +145,9 @@ jobs:
           set -euo pipefail
           CUTOFF="$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)"
           # Named cooldown exception — see the identical block in ci.yml for the full rationale.
-          # zod@4.5.4, published 2026-08-29T17:55:42Z via npm Trusted Publishing (OIDC), SLSA v1
-          # provenance, zero runtime deps. SELF-EXPIRING after 2026-09-05T18:00Z.
-          FLOOR='2026-08-29T18:00:00Z'
+          # @wishknish/knishio-kcore@0.1.0 (first-party optionalDependency), published
+          # 2026-10-04T14:57:40Z. SELF-EXPIRING after 2026-10-11T15:00Z.
+          FLOOR='2026-10-04T15:00:00Z'
           if [ "$CUTOFF" \< "$FLOOR" ]; then CUTOFF="$FLOOR"; fi
           echo "cooldown cutoff: $CUTOFF"
           npm install --package-lock-only --ignore-scripts --before="$CUTOFF"
