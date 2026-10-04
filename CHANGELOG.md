@@ -15,16 +15,25 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+
+## [1.4.0] — 2026-10-04
+
 ### Added
 
 - Optional kcore backend: when the application installs `@wishknish/knishio-kcore`, the WOTS+
   wallet address, signing and verification chains (`Wallet.generateAddress`,
   `generateOTSSignature`, `verifyOTSSignature`, `CheckMolecule.ots`) and ML-KEM-1024/768 keygen,
   encapsulation and decapsulation run in kcore. `KNISHIO_KCORE` = `auto` (default) | `off` |
-  `require` and `KNISHIO_KCORE_MODULE` control it. The package is not a dependency; without it the
-  built-in code runs, and inputs kcore does not take (non-lowercase-hex OTS text, wrong-length
-  ML-KEM inputs) always fall back, so results are identical either way. The package entry exports
-  `kcore` (`available()`, `backend()`) and `KcoreUnavailable`.
+  `require` and `KNISHIO_KCORE_MODULE` control it. Without the package the built-in code runs,
+  and inputs kcore does not take (non-lowercase-hex OTS text, wrong-length ML-KEM inputs) always
+  fall back, so results are identical either way. The package entry exports `kcore`
+  (`available()`, `backend()`) and `KcoreUnavailable`.
+- `@wishknish/knishio-kcore` `^0.1.0` is an `optionalDependency`, so kcore is on by default
+  wherever npm can install it; `--omit=optional`, unsupported platforms and browsers run the
+  built-in code.
+- CI: a `Tests (kcore required)` step reruns the vitest suite with `KNISHIO_KCORE=require`.
+- README: "Thread safety" (calls run on the calling thread; use `worker_threads` or processes for
+  multi-core throughput).
 
 ### Changed
 
@@ -673,7 +682,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.3.2...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.4.0...HEAD
+[1.4.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.4.0
 [1.3.2]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.2
 [1.3.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.1
 [1.3.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.0

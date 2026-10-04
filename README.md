@@ -501,9 +501,9 @@ Master secrets are stored at rest in the cross-SDK AES-256-GCM envelope (PBKDF2-
 
 `hardwareBacked` is derived by the provider from the platform, never accepted from the caller; software providers always report `false`. A hardware provider refuses to store without a recovery passphrase unless `allowUnrecoverable` is set — the recovery envelope (`knishio:recovery:<bundleHash>`, `providerType: "webcrypto-aes-gcm"`) is *software* custody whose strength is bounded by that passphrase: enforce passphrase entropy or keep it on a second device.
 
-## Optional kcore backend
+## kcore backend
 
-When the application also installs `@wishknish/knishio-kcore` (the Node binding of the KnishIO Crypto Core), the SDK runs the WOTS+ wallet address, signing and verification chains and ML-KEM-1024/768 keygen, encapsulation and decapsulation in kcore. The SDK does not depend on the package; without it, or in a browser, the built-in implementation runs. Both give identical results: inputs kcore does not take (for example upper-case or non-hex signature text) always run the built-in code. Loading the package needs `process.getBuiltinModule` (Node.js 20.16+ or 22.3+).
+`@wishknish/knishio-kcore` (the Node binding of the KnishIO Crypto Core) is an optional dependency, so `npm install` brings it in wherever it installs. The SDK then runs the WOTS+ wallet address, signing and verification chains and ML-KEM-1024/768 keygen, encapsulation and decapsulation in kcore. Where it is not installed (`--omit=optional`, an unsupported platform), or in a browser, the built-in implementation runs. Both give identical results: inputs kcore does not take (for example upper-case or non-hex signature text) always run the built-in code. Loading the package needs `process.getBuiltinModule` (Node.js 20.16+ or 22.3+).
 
 | Variable | Values | Effect |
 |---|---|---|
@@ -511,6 +511,10 @@ When the application also installs `@wishknish/knishio-kcore` (the Node binding 
 | `KNISHIO_KCORE_MODULE` | module specifier or absolute directory | Loads kcore from there instead of `@wishknish/knishio-kcore` |
 
 Both are read once, on first use. `kcore.available()` and `kcore.backend()` (`'napi'`, `'wasm'` or `null`), exported from the package with `KcoreUnavailable`, report whether kcore loaded.
+
+### Thread safety
+
+SDK calls, kcore included, run synchronously on the calling thread; kcore starts no threads of its own. For multi-core throughput, spread independent work (signing or verifying many molecules) across `worker_threads` or several processes. Each isolate loads kcore independently, and loading it in many workers at once is safe.
 
 ## Getting Help
 

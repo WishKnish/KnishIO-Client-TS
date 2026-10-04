@@ -104,6 +104,14 @@ jobs:
       - name: Vitest
         run: npm test
 
+      # The same suite with kcore mandatory: @wishknish/knishio-kcore is an optionalDependency,
+      # so the resolve above installs it, and require mode fails any test that silently ran the
+      # built-in path instead. kcore must be older than the cooldown cutoff to be resolved at all.
+      - name: Tests (kcore required)
+        env:
+          KNISHIO_KCORE: require
+        run: npm test
+
   changelog:
     name: changelog entry for version bump
     runs-on: ubuntu-latest
