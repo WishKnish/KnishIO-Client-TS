@@ -67,13 +67,15 @@ jobs:
           set -euo pipefail
           CUTOFF="$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)"
           # Named cooldown exception (ChainDrop policy: review the version, never drop the flag).
-          # zod@4.5.4 — published 2026-08-29T17:55:42Z by GitHub Actions via npm Trusted
-          # Publishing (OIDC, no human token), SLSA v1 provenance attestation present, zero
-          # runtime dependencies. Required by the Zod 4 migration (zod 3 is EOL and the SDK's
-          # schemas no longer parse under it). SELF-EXPIRING: from 2026-09-05T18:00Z the rolling
-          # window is already later than the floor, the floor stops binding, and this block can
-          # be reduced back to the single-line rolling resolve.
-          FLOOR='2026-08-29T18:00:00Z'
+          # @wishknish/knishio-kcore@0.1.0 — first-party (WishKnish/KnishIO-Kcore-JS), published
+          # 2026-10-04T14:57:40Z by the maintainer from the npm-tarball artifact of that repo's
+          # publish dry run 37210896144 (sha256 ad0221527854128bb83c5dfb17707f435748b88364ad86b6314ca40609457fed,
+          # byte-identical to the GitHub Release asset); no dependencies, no install scripts.
+          # It is this SDK's optionalDependency, and the `Tests (kcore required)` step needs it
+          # resolved. The floor admits every package published before it, not only this one.
+          # SELF-EXPIRING: from 2026-10-11T15:00Z the rolling window is later than the floor, the
+          # floor stops binding, and this block can go back to the single-line rolling resolve.
+          FLOOR='2026-10-04T15:00:00Z'
           if [ "$CUTOFF" \< "$FLOOR" ]; then CUTOFF="$FLOOR"; fi
           echo "cooldown cutoff: $CUTOFF"
           npm install --package-lock-only --ignore-scripts --before="$CUTOFF"
