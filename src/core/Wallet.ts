@@ -47,7 +47,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 */
 
 import JsSHA from 'jssha'
-import { randomString, chunkSubstr, isHex } from '@/libraries/strings'
+import { randomString, chunkSubstr } from '@/libraries/strings'
 import { generateBundleHash, generateSecret, shake256, generateBatchId } from '@/libraries/crypto'
 import * as kcore from '@/libraries/kcore'
 import WalletCredentialException from '@/exception/WalletCredentialException'
@@ -61,6 +61,20 @@ const ML_KEM_PARAMS = {
   768: { set: 768, kem: ml_kem768, pkBytes: 1184, skBytes: 2400, ctBytes: 1088 }
 } as const
 const DEFAULT_ML_KEM_PARAMETER_SET = 1024
+const DEFAULT_OTS_VERSION = 1
+const OTS_V2_DOMAIN_TAG = 'KnishIO-OTS-v2'
+const STRICT_HEX = /^[0-9A-Fa-f]+$/
+
+/**
+ * Validates an OTS version (1 = 16-chain key, 2 = 64-chain key)
+ */
+function checkedOtsVersion(otsVersion: unknown): 1 | 2 {
+  const version = Number(otsVersion)
+  if (version !== 1 && version !== 2) {
+    throw new Error(`KnishIO: unsupported OTS version ${String(otsVersion)}; expected 1 or 2.`)
+  }
+  return version
+}
 
 type MlKemParams = (typeof ML_KEM_PARAMS)[1024 | 768]
 type MlKemKeypair = { pubkey: string; privkey: Uint8Array; params: MlKemParams }
@@ -84,6 +98,7 @@ export default class Wallet {
   public tradeRates: Record<string, any>
   public molecules: Record<string, any>
   public mlKemParameterSet: 1024 | 768
+  public readonly otsVersion: 1 | 2
 
   // Token metadata (populated from query responses)
   public tokenName?: string
@@ -100,7 +115,8 @@ export default class Wallet {
     position = null,
     batchId = null,
     characters = null,
-    mlKemParameterSet = DEFAULT_ML_KEM_PARAMETER_SET
+    mlKemParameterSet = DEFAULT_ML_KEM_PARAMETER_SET,
+    otsVersion = DEFAULT_OTS_VERSION
   }: {
     secret?: string | null
     bundle?: string | null
@@ -110,7 +126,9 @@ export default class Wallet {
     batchId?: string | null
     characters?: string | null
     mlKemParameterSet?: 1024 | 768
+    otsVersion?: 1 | 2
   } = {}) {
+    this.otsVersion = checkedOtsVersion(otsVersion)
     const paramSetNum = Number(mlKemParameterSet) as 1024 | 768
     if (!ML_KEM_PARAMS[paramSetNum]) {
       throw new Error(`KnishIO: unsupported ML-KEM parameter set ${mlKemParameterSet}; expected 1024 or 768.`)
@@ -144,7 +162,8 @@ export default class Wallet {
       this.key = Wallet.generateKey({
         secret,
         token: this.token,
-        position: this.position
+        position: this.position,
+        otsVersion: this.otsVersion
       })
       this.address = this.address || Wallet.generateAddress(this.key)
       
@@ -166,7 +185,8 @@ export default class Wallet {
     token = 'USER',
     batchId = null,
     characters = null,
-    mlKemParameterSet = DEFAULT_ML_KEM_PARAMETER_SET
+    mlKemParameterSet = DEFAULT_ML_KEM_PARAMETER_SET,
+    otsVersion = DEFAULT_OTS_VERSION
   }: {
     secret?: string | null
     bundle?: string | null
@@ -174,6 +194,7 @@ export default class Wallet {
     batchId?: string | null
     characters?: string | null
     mlKemParameterSet?: 1024 | 768
+    otsVersion?: 1 | 2
   }): Wallet {
     let position: string | null = null
 
@@ -197,61 +218,81 @@ export default class Wallet {
       position,
       batchId,
       characters,
-      mlKemParameterSet
+      mlKemParameterSet,
+      otsVersion
     })
   }
 
 
   /**
-   * Generates a private key for the given parameters
+   * Generates a private key for the given parameters: 2048 hex (OTS v1, 16 chains)
+   * or 8192 hex (OTS v2, 64 chains)
    * MUST match JavaScript SDK Wallet.generateKey exactly using sponge pattern
    */
   static generateKey({
     secret,
     token,
-    position
+    position,
+    otsVersion = DEFAULT_OTS_VERSION
   }: {
     secret: string
     token: string
     position: string
+    otsVersion?: 1 | 2
   }): string {
+    const version = checkedOtsVersion(otsVersion)
+    if (!secret) {
+      throw new WalletCredentialException('Wallet::generateKey() - Secret is required!')
+    }
+    if (!position) {
+      throw new WalletCredentialException('Wallet::generateKey() - Position is required!')
+    }
+
     // Normalize non-hex secret/position via SHAKE256 (matching JS/Rust SDKs)
-    const secretHex = isHex(secret) ? secret : shake256(secret, 1024)
-    const positionHex = isHex(position) ? position : shake256(position, 256)
+    const secretHex = STRICT_HEX.test(secret) ? secret : shake256(secret, 1024)
+    const positionHex = STRICT_HEX.test(position) ? position : shake256(position, 256)
 
     // Converting secret to bigInt
     const bigIntSecret = BigInt(`0x${secretHex}`)
 
     // Adding new position to the user secret to produce the indexed key
     const indexedKey = bigIntSecret + BigInt(`0x${positionHex}`)
-    
+
     // Hashing the indexed key to produce the intermediate key
-    // CRITICAL FIX: Use sponge pattern exactly like JavaScript SDK
     const intermediateKeySponge = new JsSHA('SHAKE256', 'TEXT')
-    intermediateKeySponge.update(indexedKey.toString(16))
-    
-    if (token) {
-      // CRITICAL FIX: Update the SAME sponge with token (no concatenation)
-      intermediateKeySponge.update(token)
+
+    if (version === 2) {
+      intermediateKeySponge.update(`${OTS_V2_DOMAIN_TAG}|${indexedKey.toString(16)}|${token || ''}`)
+    } else {
+      intermediateKeySponge.update(indexedKey.toString(16))
+      if (token) {
+        // Update the SAME sponge with token (no concatenation)
+        intermediateKeySponge.update(token)
+      }
     }
-    
-    // Hashing the intermediate key to produce the private key
-    // CRITICAL FIX: Create NEW sponge for private key (matching JS SDK)
+
+    // Hashing the intermediate key to produce the private key (new sponge, matching JS SDK)
     const privateKeySponge = new JsSHA('SHAKE256', 'TEXT')
     privateKeySponge.update(intermediateKeySponge.getHash('HEX', { outputLen: 8192 }))
-    
-    return privateKeySponge.getHash('HEX', { outputLen: 8192 })
+
+    return privateKeySponge.getHash('HEX', { outputLen: version === 2 ? 32768 : 8192 })
   }
 
   /**
-   * Generates a wallet address
+   * Generates a wallet address from a 2048-hex (OTS v1) or 8192-hex (OTS v2) private key
    * Matches JavaScript SDK Wallet.generateAddress exactly
    */
   static generateAddress(key: string): string {
     const viaKcore = kcore.wotsAddress(key)
     if (viaKcore !== null) return viaKcore
 
-    // Subdivide private key into 16 fragments of 128 characters each
+    // kcore's address entry point takes v1 keys only; its chain primitive takes the 64 v2 chains
+    const endpoints = key.length === 8192 ? kcore.chainsHex(key, new Array<number>(64).fill(16)) : null
+    if (endpoints !== null) {
+      return shake256(shake256(endpoints, 8192), 256)
+    }
+
+    // Subdivide private key into fragments of 128 characters each (16 for v1, 64 for v2)
     const keyFragments = chunkSubstr(key, 128)
     
     // Generating wallet digest
@@ -315,7 +356,8 @@ export default class Wallet {
       bundle: this.bundle,
       token: this.token,
       batchId: this.batchId,
-      characters: this.characters
+      characters: this.characters,
+      otsVersion: this.otsVersion
     })
   }
 

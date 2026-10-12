@@ -15,6 +15,32 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in OTS v2 signatures: 8192-hex keys with 64 WOTS+ chains (v1 keys stay 2048 hex, 16
+  chains). `Wallet.generateKey({ ..., otsVersion })`, the `Wallet` constructor and
+  `Wallet.create` take `otsVersion` (`1` default, or `2`); `wallet.otsVersion` is read-only.
+  Any other version throws `KnishIO: unsupported OTS version <n>; expected 1 or 2.`
+- `Molecule.signingOtsVersion()`: the source wallet's OTS version, or `1` without one.
+- `isSignableMolecularHash(hash)` and `assertSignableMolecularHash(hash)` in the crypto library.
+
+### Changed
+
+- `CheckMolecule.ots()` verifies v1 and v2 signatures (2048 or 8192 hex, or their base64
+  form). A compressed signature that is not valid base64 throws `SignatureMalformedException`.
+- A molecular hash that is not exactly 64 lowercase base17 characters (`^[0-9a-g]{64}$`) throws
+  `SignatureMalformedException` from `Molecule.sign()`, `generateOTSSignature` and
+  `CheckMolecule.ots()`; `verifyOTSSignature` returns `false` for it.
+- `generateOTSSignature` and `verifyOTSSignature` accept 2048- and 8192-hex keys/signatures;
+  `validateOTSSignature` accepts exactly 2048 or 8192 characters.
+- Remainder, ContinuID and deposit-buffer wallets a molecule creates, `Wallet.createRemainder`,
+  and the `KnishIOClient.createMolecule` default remainder keep the signing wallet's OTS version;
+  re-deriving an existing ContinuID wallet's key uses that wallet's version.
+- `Wallet.generateKey` throws `WalletCredentialException` for an empty secret or position, and
+  treats a secret or position as hex only when it is entirely `[0-9A-Fa-f]` (a `0x` prefix is
+  hashed as text, as in the other SDKs). `KnishIOClient.getSourceWallet` re-derives an existing
+  ContinuID wallet's key only when that wallet has a position.
+
 
 ## [1.4.0] — 2026-10-04
 

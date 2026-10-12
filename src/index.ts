@@ -218,6 +218,8 @@ import {
   verifyOTSSignature,
   validateOTSSignature,
   validateMolecularHashForSignature,
+  isSignableMolecularHash,
+  assertSignableMolecularHash,
   runExtendedCompatibilityTests,
   EXTENDED_COMPATIBILITY_TEST_VECTORS
 } from './libraries/crypto'
@@ -245,6 +247,8 @@ export {
   verifyOTSSignature,
   validateOTSSignature,
   validateMolecularHashForSignature,
+  isSignableMolecularHash,
+  assertSignableMolecularHash,
   runExtendedCompatibilityTests,
   EXTENDED_COMPATIBILITY_TEST_VECTORS
 }

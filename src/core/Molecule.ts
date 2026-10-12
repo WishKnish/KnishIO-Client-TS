@@ -53,7 +53,7 @@ import TokenUnit from './TokenUnit'
 import Rule from '@/instance/rules/Rule'
 import CheckMolecule from '@/libraries/CheckMolecule'
 import { chunkSubstr, hexToBase64 } from '@/libraries/strings'
-import { generateBundleHash, generateBatchId, generateOTSSignature } from '@/libraries/crypto'
+import { generateBundleHash, generateBatchId, generateOTSSignature, assertSignableMolecularHash } from '@/libraries/crypto'
 import versions from '@/versions'
 import {
   AtomsMissingException,
@@ -137,7 +137,8 @@ export default class Molecule {
         token: sourceWallet!.token,
         batchId: sourceWallet!.batchId,
         characters: sourceWallet!.characters,
-        mlKemParameterSet: this.mlKemParameterSet
+        mlKemParameterSet: this.mlKemParameterSet,
+        otsVersion: this.signingOtsVersion()
       })
     } else {
       this.remainderWallet = null
@@ -215,7 +216,8 @@ export default class Molecule {
       this.remainderWallet = Wallet.create({
         secret: this.secret!,
         bundle: this.bundle!,
-        mlKemParameterSet: this.mlKemParameterSet
+        mlKemParameterSet: this.mlKemParameterSet,
+        otsVersion: this.signingOtsVersion()
       })
     }
 
@@ -382,6 +384,13 @@ export default class Molecule {
   }
 
   /**
+   * OTS version this molecule signs with: the source wallet's, or 1 without a source wallet
+   */
+  signingOtsVersion(): 1 | 2 {
+    return this.sourceWallet?.otsVersion ?? 1
+  }
+
+  /**
    * Sign the molecule with one-time signature
    * Matches JavaScript SDK sign method
    */
@@ -409,6 +418,9 @@ export default class Molecule {
       atoms: this.atoms
     })
 
+    // Only a 64-symbol lowercase base17 hash can be signed
+    assertSignableMolecularHash(this.molecularHash)
+
     // Signing atom
     const signingAtom = this.atoms[0]
     if (!signingAtom) {
@@ -425,7 +437,8 @@ export default class Molecule {
     const key = Wallet.generateKey({
       secret: this.secret!,
       token: signingAtom.token as string,
-      position: signingPosition
+      position: signingPosition,
+      otsVersion: this.signingOtsVersion()
     })
 
     // Use standardized WOTS+ signature generation from crypto library
@@ -1344,7 +1357,8 @@ export default class Molecule {
       bundle: this.bundle,
       token: this.sourceWallet.token,
       batchId: this.sourceWallet.batchId,
-      mlKemParameterSet: this.mlKemParameterSet
+      mlKemParameterSet: this.mlKemParameterSet,
+      otsVersion: this.signingOtsVersion()
     })
     if (tradeRates) {
       bufferWallet.tradeRates = tradeRates

@@ -610,7 +610,8 @@ export default class KnishIOClient {
       token: 'USER',
       batchId: sourceWallet!.batchId,
       characters: sourceWallet!.characters,
-      mlKemParameterSet: this.getMlKemParameterSet()
+      mlKemParameterSet: this.getMlKemParameterSet(),
+      otsVersion: sourceWallet!.otsVersion
     }))
 
     return new Molecule({
@@ -781,11 +782,12 @@ export default class KnishIOClient {
         secret: this.getSecret(),
         mlKemParameterSet: this.getMlKemParameterSet()
       })
-    } else {
+    } else if (sourceWallet.position) {
       sourceWallet.key = Wallet.generateKey({
         secret: this.getSecret(),
         token: sourceWallet.token,
-        position: sourceWallet.position!
+        position: sourceWallet.position,
+        otsVersion: sourceWallet.otsVersion
       })
     }
 

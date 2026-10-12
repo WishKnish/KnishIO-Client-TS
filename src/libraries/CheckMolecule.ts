@@ -69,7 +69,7 @@ import Meta from '@/core/Meta'
 import Wallet from '@/core/Wallet'
 import Rule from '@/instance/rules/Rule'
 import { base64ToHex, chunkSubstr } from '@/libraries/strings'
-import { shake256 } from '@/libraries/crypto'
+import { shake256, isSignableMolecularHash } from '@/libraries/crypto'
 import * as kcore from '@/libraries/kcore'
 import Molecule from '@/core/Molecule'
 
@@ -696,28 +696,34 @@ export default class CheckMolecule {
    * @throws SignatureMismatchException if signature doesn't match
    */
   ots(): boolean {
+    // The declared hash must be exactly 64 lowercase base17 characters before any chain work
+    if (!isSignableMolecularHash(this.molecule.molecularHash)) {
+      throw new SignatureMalformedException()
+    }
+
     // Convert Hm to numeric notation via EnumerateMolecule(Hm)
     const normalizedHash = this.molecule.normalizedHash()
 
     // Rebuilding OTS out of all the atoms
     let ots = this.molecule.atoms.map(
       atom => atom.otsFragment || ''
-    ).reduce(
-      (accumulator, otsFragment) => accumulator + otsFragment
-    )
+    ).join('')
 
-    // Wrong size? Maybe it's compressed
-    if (ots.length !== 2048) {
-      // Attempting decompression
-      ots = base64ToHex(ots)
+    // OTS v1 is 2048 hex characters (16 chains), OTS v2 8192 (64 chains); anything else is
+    // the compressed (base64) form, and the decoded length decides the version
+    if (ots.length !== 2048 && ots.length !== 8192) {
+      if (ots.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(ots)) {
+        throw new SignatureMalformedException()
+      }
+      ots = base64ToHex(ots).toLowerCase()
 
-      // Still wrong? That's a failure
-      if (ots.length !== 2048) {
+      // Still neither size? That's a failure
+      if (ots.length !== 2048 && ots.length !== 8192) {
         throw new SignatureMalformedException()
       }
     }
 
-    // Subdivide Kk into 16 segments of 256 bytes (128 characters) each
+    // Subdivide the signature into segments of 128 hex characters: 16 (v1) or 64 (v2)
     const otsChunks = chunkSubstr(ots, 128)
 
     const keyFragments = kcore.chainsHex(ots, otsChunks.map((_, i) => 8 + (normalizedHash[i] || 0))) ?? otsChunks.map((chunk, index) => {

@@ -54,6 +54,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 import JsSHA from 'jssha'
 import { randomString } from './strings'
 import * as kcore from './kcore'
+import SignatureMalformedException from '../exception/SignatureMalformedException'
 import type { 
   BundleHash,
   Position,
@@ -596,25 +597,40 @@ export function normalizeMolecularHash(mappedHashArray: number[]): number[] {
 // =============================================================================
 
 /**
- * Generate WOTS+ one-time signature for molecular hash
+ * True when the molecular hash is exactly 64 lowercase base17 symbols (^[0-9a-g]{64}$),
+ * the only form OTS signing and verification accept
+ */
+export function isSignableMolecularHash(hash: unknown): hash is string {
+  return typeof hash === 'string' && /^[0-9a-g]{64}$/.test(hash)
+}
+
+/**
+ * Throws SignatureMalformedException unless the molecular hash is signable
+ */
+export function assertSignableMolecularHash(hash: unknown): asserts hash is string {
+  if (!isSignableMolecularHash(hash)) {
+    throw new SignatureMalformedException('Molecular hash must be 64 lowercase base17 characters')
+  }
+}
+
+/**
+ * Generate WOTS+ one-time signature for molecular hash from a 2048-hex (OTS v1)
+ * or 8192-hex (OTS v2) private key
  * MUST match JavaScript SDK implementation exactly for cross-platform compatibility
  */
 export function generateOTSSignature(privateKey: string, molecularHash: string): string {
-  if (!privateKey || privateKey.length < 2048) {
-    throw new Error('Private key must be at least 2048 characters for OTS signature')
+  if (!privateKey || (privateKey.length !== 2048 && privateKey.length !== 8192)) {
+    throw new Error('Private key must be 2048 or 8192 characters for OTS signature')
   }
-  
-  if (!molecularHash || molecularHash.length !== 64) {
-    throw new Error('Molecular hash must be exactly 64 characters')
-  }
-  
+
+  assertSignableMolecularHash(molecularHash)
+
   try {
     // Step 1: Molecular hash is already base17 from Atom.hashAtoms(), enumerate and normalize it
-    // Fix: Don't convert to base17 again - it's already base17 (matching JS SDK behavior)
     const enumerated = enumerateMolecularHash(molecularHash)
     const normalized = normalizeMolecularHash(enumerated)
-    
-    // Step 2: Subdivide private key into 16 chunks of 128 characters each
+
+    // Step 2: Subdivide private key into chunks of 128 characters each (16 for v1, 64 for v2)
     const keyChunks: string[] = []
     for (let i = 0; i < privateKey.length; i += CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE) {
       keyChunks.push(privateKey.substring(i, i + CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE))
@@ -661,17 +677,20 @@ export function verifyOTSSignature(
   try {
     // Step 1: Convert molecular hash to base17 and normalize
     const base17Hash = convertToBase17(molecularHash)
-    const enumerated = enumerateMolecularHash(base17Hash)
-    const normalized = normalizeMolecularHash(enumerated)
-    
-    // Step 2: Fragments must be the uncompressed 2048-character form. Base64-compressed
-    // signatures are not supported and are rejected here rather than expanded.
-    const ots = otsFragments
-    if (ots.length !== 2048) {
+    if (!isSignableMolecularHash(base17Hash)) {
       return false
     }
-    
-    // Step 3: Subdivide OTS into 16 segments of 128 characters each
+    const enumerated = enumerateMolecularHash(base17Hash)
+    const normalized = normalizeMolecularHash(enumerated)
+
+    // Step 2: Fragments must be the uncompressed 2048-character (v1) or 8192-character (v2)
+    // form. Base64-compressed signatures are not supported and are rejected here rather than expanded.
+    const ots = otsFragments
+    if (ots.length !== 2048 && ots.length !== 8192) {
+      return false
+    }
+
+    // Step 3: Subdivide OTS into segments of 128 characters each (16 for v1, 64 for v2)
     const otsChunks: string[] = []
     for (let i = 0; i < ots.length; i += CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE) {
       otsChunks.push(ots.substring(i, i + CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE))
@@ -716,10 +735,9 @@ export function verifyOTSSignature(
  */
 export function validateOTSSignature(signature: string): boolean {
   if (!signature || typeof signature !== 'string') return false
-  
-  // OTS signature should be 2048 characters (16 chunks * 128 chars each)
-  // or compressed format
-  return signature.length === 2048 || (signature.length > 0 && signature.length < 2048)
+
+  // Uncompressed OTS signature: 2048 characters (v1, 16 chains) or 8192 characters (v2, 64 chains)
+  return signature.length === 2048 || signature.length === 8192
 }
 
 /**
