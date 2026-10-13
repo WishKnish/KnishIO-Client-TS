@@ -54,6 +54,11 @@ detail, the entry says so instead of guessing.
   `WalletCredentialException` when neither version derives the address; the login pointer falls
   back to an AUTH wallet as before.
 
+### Security
+
+- Development dependencies: `ip-address`, `brace-expansion`, `@humanfs/node`, `http-cache-semantics`
+  and `source-map-js` updated; `yarn.lock` now also records the existing optional
+  `@wishknish/knishio-kcore` dependency. The published package's dependencies are unchanged.
 
 ## [1.4.0] — 2026-10-04
 
