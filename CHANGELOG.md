@@ -22,6 +22,11 @@ detail, the entry says so instead of guessing.
   `Wallet.create` take `otsVersion` (`1` default, or `2`).
   Any other version throws `KnishIO: unsupported OTS version <n>; expected 1 or 2.`
 - `Molecule.signingOtsVersion()`: the source wallet's OTS version, or `1` without one.
+- `new Molecule({ …, minOtsVersion })` (`1` default, or `2`) and `molecule.successorOtsVersion()`:
+  the remainder, ContinuID and buffer wallets a molecule creates take the higher of its signing
+  version and `minOtsVersion`.
+- `wallet.createRemainder(secret, minOtsVersion)`: the remainder takes the higher of the wallet's
+  version and `minOtsVersion` (default 1).
 - `isSignableMolecularHash(hash)` and `assertSignableMolecularHash(hash)` in the crypto library.
 - **Client-level OTS version.** `new KnishIOClient({ …, otsVersion })` (1 default, or 2),
   `getOtsVersion()` and `setOtsVersion()`. Keys the client creates from its secret (the first
@@ -40,9 +45,17 @@ detail, the entry says so instead of guessing.
   `CheckMolecule.ots()`; `verifyOTSSignature` returns `false` for it.
 - `generateOTSSignature` and `verifyOTSSignature` accept 2048- and 8192-hex keys/signatures;
   `validateOTSSignature` accepts exactly 2048 or 8192 characters.
-- Remainder, ContinuID and deposit-buffer wallets a molecule creates, `Wallet.createRemainder`,
-  and the `KnishIOClient.createMolecule` default remainder keep the signing wallet's OTS version;
-  re-deriving an existing ContinuID wallet's key uses that wallet's version.
+- Remainder, ContinuID and deposit-buffer wallets a molecule creates and `Wallet.createRemainder`
+  keep at least the signing wallet's OTS version; re-deriving an existing ContinuID wallet's key
+  uses that wallet's version.
+- `KnishIOClient.createMolecule()` creates its default remainder wallet at the higher of the
+  source wallet's and the client's OTS version.
+- A client set to `otsVersion: 2` creates the ContinuID head, token remainders and deposit buffer
+  of every molecule it signs at version 2, so an identity created at version 1 moves to version 2
+  on its next sign-in or molecule. A client at version 1 keeps a version 2 identity at version 2.
+- `ResponseWalletList.getWallets(secret)` and `ResponseBalance.toClientWallet({ data, secret })`
+  key each wallet at the OTS version its address was derived at, and return it without a key when
+  neither version derives that address.
 - `Wallet.generateKey` throws `WalletCredentialException` for an empty secret or position, and
   treats a secret or position as hex only when it is entirely `[0-9A-Fa-f]` (a `0x` prefix is
   hashed as text, as in the other SDKs). `KnishIOClient.getSourceWallet` re-derives an existing

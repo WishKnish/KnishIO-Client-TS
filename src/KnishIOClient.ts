@@ -650,7 +650,8 @@ export default class KnishIOClient {
       sourceWallet = await this.getSourceWallet()
     }
 
-    // Set the remainder wallet for the next transaction (always USER token for ContinuID)
+    // Set the remainder wallet for the next transaction (always USER token for ContinuID): never
+    // below the client's OTS version, so a client set to v2 moves the identity's ContinuID head to v2
     this.setRemainderWallet(remainderWallet || Wallet.create({
       secret: secret!,
       bundle,
@@ -658,7 +659,7 @@ export default class KnishIOClient {
       batchId: sourceWallet!.batchId,
       characters: sourceWallet!.characters,
       mlKemParameterSet: this.getMlKemParameterSet(),
-      otsVersion: sourceWallet!.otsVersion
+      otsVersion: Math.max(sourceWallet!.otsVersion, this.getOtsVersion()) as 1 | 2
     }))
 
     return new Molecule({
@@ -669,7 +670,8 @@ export default class KnishIOClient {
       cellSlug: this.getCellSlug(),
       version: this.getServerSdkVersion(),
       continuIdPosition,
-      mlKemParameterSet: this.getMlKemParameterSet()
+      mlKemParameterSet: this.getMlKemParameterSet(),
+      minOtsVersion: this.getOtsVersion()
     })
   }
 
@@ -907,7 +909,7 @@ export default class KnishIOClient {
     }
 
     // Create a remainder from the source wallet
-    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret(), this.getOtsVersion())
 
     // Token units splitting
     sourceWallet.splitUnits(
@@ -996,7 +998,7 @@ export default class KnishIOClient {
     })
 
     // Canonical remainder (carries the source's token/characters; reuses the source batch id)
-    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret(), this.getOtsVersion())
 
     // Stackable (NFT): partition the source's tokenUnits across source (SENT union), each
     // recipient (its subset), and remainder (KEPT) BEFORE the molecule is built. No-op for fungible.
@@ -1958,7 +1960,7 @@ export default class KnishIOClient {
     }
 
     // Create remainder wallet from source (must be same token for V-isotope conservation)
-    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret(), this.getOtsVersion())
 
     // Create molecule with the token-specific source and remainder wallets
     const molecule = await this.createMolecule({
@@ -2095,7 +2097,7 @@ export default class KnishIOClient {
 
     const molecule = await this.createMolecule({
       sourceWallet,
-      remainderWallet: sourceWallet.createRemainder(this.getSecret())
+      remainderWallet: sourceWallet.createRemainder(this.getSecret(), this.getOtsVersion())
     })
     molecule.fuseToken({ fusedTokenUnitIds, newTokenUnit, recipientWallet })
     molecule.sign({ bundle: this.getBundle() })
@@ -2512,7 +2514,7 @@ export default class KnishIOClient {
     }
 
     // Create remainder wallet from source (must be same token)
-    const remainderWallet = sourceWallet.createRemainder(this.getSecret())
+    const remainderWallet = sourceWallet.createRemainder(this.getSecret(), this.getOtsVersion())
 
     // Build the molecule with the token-specific source and remainder wallets
     const molecule = await this.createMolecule({
@@ -2575,7 +2577,7 @@ export default class KnishIOClient {
 
     const molecule = await this.createMolecule({
       sourceWallet,
-      remainderWallet: sourceWallet.createRemainder(this.getSecret())
+      remainderWallet: sourceWallet.createRemainder(this.getSecret(), this.getOtsVersion())
     })
 
     const mutation = await this.createMoleculeMutation({

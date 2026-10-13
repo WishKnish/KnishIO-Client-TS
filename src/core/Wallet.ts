@@ -398,17 +398,18 @@ export default class Wallet {
   }
 
   /**
-   * Create a remainder wallet for transactions
+   * Create a remainder wallet for transactions. Its OTS version is the higher of this wallet's
+   * and minOtsVersion (1 or 2, default 1).
    * Used by Molecule for creating remainder atoms
    */
-  createRemainder(secret: string): Wallet {
+  createRemainder(secret: string, minOtsVersion: 1 | 2 = 1): Wallet {
     return Wallet.create({
       secret,
       bundle: this.bundle,
       token: this.token,
       batchId: this.batchId,
       characters: this.characters,
-      otsVersion: this.otsVersion
+      otsVersion: Math.max(this.otsVersion, checkedOtsVersion(minOtsVersion)) as 1 | 2
     })
   }
 

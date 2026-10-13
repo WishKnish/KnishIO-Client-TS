@@ -85,10 +85,14 @@ export default class Molecule {
   public parentHashes: string[]
   public local?: number
   public mlKemParameterSet: 1024 | 768 = 1024
+  public minOtsVersion: 1 | 2 = 1
 
   /**
    * Create new Molecule instance
    * Matches JavaScript SDK constructor signature
+   *
+   * `minOtsVersion` (1 or 2, default 1) is the lowest OTS version for the wallets this molecule
+   * creates for its signer; see successorOtsVersion()
    */
   constructor({
     secret = null,
@@ -98,7 +102,8 @@ export default class Molecule {
     cellSlug = null,
     version = null,
     continuIdPosition = null,
-    mlKemParameterSet = null
+    mlKemParameterSet = null,
+    minOtsVersion = 1
   }: {
     secret?: string | null
     bundle?: string | null
@@ -108,6 +113,7 @@ export default class Molecule {
     version?: string | number | null
     continuIdPosition?: string | null
     mlKemParameterSet?: 1024 | 768 | null
+    minOtsVersion?: 1 | 2
   } = {}) {
     this.status = null
     this.molecularHash = null
@@ -120,6 +126,7 @@ export default class Molecule {
     this.atoms = []
     this.parentHashes = []
     this.mlKemParameterSet = mlKemParameterSet || sourceWallet?.mlKemParameterSet || 1024
+    this.minOtsVersion = Wallet.checkedOtsVersion(minOtsVersion)
 
     const versionRegistry = versions as Record<string | number, any>
     if (version !== null && Object.prototype.hasOwnProperty.call(versionRegistry, version)) {
@@ -138,7 +145,7 @@ export default class Molecule {
         batchId: sourceWallet!.batchId,
         characters: sourceWallet!.characters,
         mlKemParameterSet: this.mlKemParameterSet,
-        otsVersion: this.signingOtsVersion()
+        otsVersion: this.successorOtsVersion()
       })
     } else {
       this.remainderWallet = null
@@ -217,7 +224,7 @@ export default class Molecule {
         secret: this.secret!,
         bundle: this.bundle!,
         mlKemParameterSet: this.mlKemParameterSet,
-        otsVersion: this.signingOtsVersion()
+        otsVersion: this.successorOtsVersion()
       })
     }
 
@@ -388,6 +395,14 @@ export default class Molecule {
    */
   signingOtsVersion(): 1 | 2 {
     return this.sourceWallet?.otsVersion ?? 1
+  }
+
+  /**
+   * OTS version of the wallets this molecule creates for its signer (remainder, ContinuID,
+   * buffer): the higher of the signing version and minOtsVersion
+   */
+  successorOtsVersion(): 1 | 2 {
+    return Math.max(this.signingOtsVersion(), this.minOtsVersion) as 1 | 2
   }
 
   /**
@@ -1358,7 +1373,7 @@ export default class Molecule {
       token: this.sourceWallet.token,
       batchId: this.sourceWallet.batchId,
       mlKemParameterSet: this.mlKemParameterSet,
-      otsVersion: this.signingOtsVersion()
+      otsVersion: this.successorOtsVersion()
     })
     if (tradeRates) {
       bufferWallet.tradeRates = tradeRates

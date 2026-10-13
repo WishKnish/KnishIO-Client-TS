@@ -18,6 +18,9 @@ import KnishIOClient from '../../src/KnishIOClient'
 import AuthToken from '../../src/AuthToken'
 import MutationCreateWallet from '../../src/mutation/MutationCreateWallet'
 import WalletCredentialException from '../../src/exception/WalletCredentialException'
+import ResponseWalletList from '../../src/response/ResponseWalletList'
+import ResponseBalance from '../../src/response/ResponseBalance'
+import MutationProposeMolecule from '../../src/mutation/MutationProposeMolecule'
 
 type KeyCase = { name: string, secret: string, token: string, position: string, expectedKeyV1: string, expectedKeyV2: string, expectedAddressV1: string, expectedAddressV2: string }
 type MoleculeJson = { atoms: Array<{ otsFragment?: string | null }> }
@@ -166,6 +169,21 @@ describe('client-level OTS version', () => {
   }
   const continuIdReturns = (client: KnishIOClient, wallet: Wallet | null) =>
     vi.spyOn(client, 'queryContinuId').mockResolvedValue({ payload: () => wallet } as never)
+  type ProposedAtom = { isotope: string, walletAddress: string, position: string, token: string }
+  const addressAt = (token: string, atPosition: string, otsVersion: 1 | 2): string =>
+    Wallet.generateAddress(Wallet.generateKey({ secret, token, position: atPosition, otsVersion }))
+  const continuIdAtom = (molecule: { atoms: ProposedAtom[] }): ProposedAtom => molecule.atoms.find(atom => atom.isotope === 'I')!
+  // The serialized molecules the client proposes (login, createMeta, transferToken all run executeQuery)
+  const proposals = (client: KnishIOClient): Array<{ atoms: ProposedAtom[] }> => {
+    const molecules: Array<{ atoms: ProposedAtom[] }> = []
+    vi.spyOn(client, 'executeQuery').mockImplementation(async (query) => {
+      if (query instanceof MutationProposeMolecule) {
+        molecules.push(query.molecule())
+      }
+      return { success: () => true, reason: () => null, payload: () => null, token: () => 't', expiresAt: () => 0, pubKey: () => null, encrypt: () => false } as never
+    })
+    return molecules
+  }
 
   it('detectOtsVersion finds the version an address was derived at, either preferred order', () => {
     for (const preferred of [1, 2] as const) {
@@ -244,5 +262,114 @@ describe('client-level OTS version', () => {
 
     delete snapshot.wallet!.otsVersion
     expect(AuthToken.restore(snapshot, secret).getWallet()!.otsVersion).toBe(1)
+  })
+
+  it('a v2 client signing in from a v1 ContinuID pointer registers a v2 head', async () => {
+    const client = clientAt(2)
+    continuIdReturns(client, ledgerWallet(addressV1))
+    const molecules = proposals(client)
+    await client.requestProfileAuthToken({ secret, encrypt: false })
+    expect(molecules).toHaveLength(1)
+    expect(molecules[0]!.atoms[0]!.walletAddress).toBe(addressV1)
+    const head = continuIdAtom(molecules[0]!)
+    expect(head.walletAddress).toBe(addressAt('USER', head.position, 2))
+    expect(client.getAuthToken()!.getWallet()!.otsVersion).toBe(1)
+    expect(molecules[0]).not.toHaveProperty('minOtsVersion')
+    vi.restoreAllMocks()
+  })
+
+  it('a v2 client signing from a v1 ContinuID head registers a v2 head', async () => {
+    const client = clientAt(2)
+    continuIdReturns(client, ledgerWallet(addressV1))
+    const molecules = proposals(client)
+    await client.createMeta({ metaType: 'ots', metaId: 'migrate', meta: { k: 'v' } })
+    expect(molecules[0]!.atoms[0]!.walletAddress).toBe(addressV1)
+    const head = continuIdAtom(molecules[0]!)
+    expect(head.walletAddress).toBe(addressAt('USER', head.position, 2))
+    vi.restoreAllMocks()
+  })
+
+  it('a v1 client signing from a v2 ContinuID head keeps a v2 head', async () => {
+    const client = clientAt(1)
+    continuIdReturns(client, ledgerWallet(addressV2))
+    const molecules = proposals(client)
+    await client.createMeta({ metaType: 'ots', metaId: 'keep', meta: { k: 'v' } })
+    expect(molecules[0]!.atoms[0]!.walletAddress).toBe(addressV2)
+    const head = continuIdAtom(molecules[0]!)
+    expect(head.walletAddress).toBe(addressAt('USER', head.position, 2))
+    vi.restoreAllMocks()
+  })
+
+  it('createRemainder takes the higher of the wallet OTS version and minOtsVersion', () => {
+    const v1 = new Wallet({ secret, token: 'TKN', position })
+    const v2 = new Wallet({ secret, token: 'TKN', position, otsVersion: 2 })
+    expect(v1.createRemainder(secret).otsVersion).toBe(1)
+    expect(v1.createRemainder(secret, 2).otsVersion).toBe(2)
+    expect(v2.createRemainder(secret, 1).otsVersion).toBe(2)
+    expect(() => v1.createRemainder(secret, 3 as never)).toThrow('KnishIO: unsupported OTS version 3; expected 1 or 2.')
+  })
+
+  it('a molecule creates its signer wallets at the higher of the signing version and minOtsVersion', () => {
+    const sourceWallet = new Wallet({ secret, token: 'TKN', position })
+    sourceWallet.balance = '10'
+    const molecule = new Molecule({ secret, sourceWallet, minOtsVersion: 2 })
+    expect(molecule.signingOtsVersion()).toBe(1)
+    expect(molecule.successorOtsVersion()).toBe(2)
+    expect(molecule.remainderWallet!.otsVersion).toBe(2)
+
+    molecule.initDepositBuffer({ amount: 4, tradeRates: {} })
+    const buffer = molecule.atoms.find(atom => atom.isotope === 'B')!
+    expect(buffer.walletAddress).toBe(addressAt('TKN', buffer.position!, 2))
+
+    molecule.addContinuIdAtom()
+    expect(molecule.remainderWallet!.token).toBe('USER')
+    expect(molecule.remainderWallet!.otsVersion).toBe(2)
+    expect(new Molecule({ secret, sourceWallet }).successorOtsVersion()).toBe(1)
+  })
+
+  it('a v2 client transferring from a v1 token wallet creates a v2 remainder', async () => {
+    const tokenPosition = 'd'.repeat(64)
+    const tokenWallet = new Wallet({ secret: null, token: 'TKN', position: tokenPosition, address: addressAt('TKN', tokenPosition, 1) })
+    tokenWallet.balance = '100'
+    const client = clientAt(2)
+    continuIdReturns(client, ledgerWallet(addressV1))
+    vi.spyOn(client, 'queryBalance').mockResolvedValue({ payload: () => tokenWallet } as never)
+    const molecules = proposals(client)
+    await client.transferToken({ bundleHash: Wallet.create({ secret: 'e'.repeat(2048) }).bundle!, token: 'TKN', amount: 10 })
+    const [molecule] = molecules
+    expect(molecule!.atoms[0]!.walletAddress).toBe(tokenWallet.address)
+    const remainder = molecule!.atoms.find((atom, index) => index > 0 && atom.isotope === 'V' && atom.token === 'TKN' && atom.position)!
+    expect(remainder.walletAddress).toBe(addressAt('TKN', remainder.position, 2))
+    vi.restoreAllMocks()
+  })
+
+  it('a ledger wallet rebuilt with the secret is keyed at the version its address was derived at', () => {
+    const tokenPosition = 'd'.repeat(64)
+    const data = (address: string) => ({
+      position: tokenPosition,
+      tokenSlug: 'TKN',
+      batchId: null,
+      characters: null,
+      address,
+      bundleHash: Wallet.create({ secret }).bundle,
+      tokenUnits: [],
+      tradeRates: [],
+      amount: '5',
+      pubkey: null,
+      createdAt: '0'
+    })
+    const expected = new Wallet({ secret, token: 'TKN', position: tokenPosition, otsVersion: 2 })
+    for (const toClientWallet of [ResponseWalletList.toClientWallet, ResponseBalance.toClientWallet]) {
+      const rebuilt = toClientWallet({ data: data(expected.address!), secret })
+      expect(rebuilt.otsVersion).toBe(2)
+      expect(rebuilt.key).toBe(expected.key)
+      expect(rebuilt.address).toBe(expected.address)
+      expect(rebuilt.privkey).toBeTruthy()
+      expect(rebuilt.privkey).toEqual(expected.privkey)
+
+      const unrelatedWallet = toClientWallet({ data: data(unrelated), secret })
+      expect(unrelatedWallet.key).toBeFalsy()
+      expect(unrelatedWallet.address).toBe(unrelated)
+    }
   })
 })
