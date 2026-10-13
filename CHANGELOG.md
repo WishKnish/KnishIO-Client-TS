@@ -38,6 +38,7 @@ detail, the entry says so instead of guessing.
 
 ### Changed
 
+- With `@wishknish/knishio-kcore` 0.2.0, OTS v2 wallet addresses are computed by kcore.
 - `CheckMolecule.ots()` verifies v1 and v2 signatures (2048 or 8192 hex, or their base64
   form). A compressed signature that is not valid base64 throws `SignatureMalformedException`.
 - A molecular hash that is not exactly 64 lowercase base17 characters (`^[0-9a-g]{64}$`) throws

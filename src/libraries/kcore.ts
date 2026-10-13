@@ -28,6 +28,7 @@ interface KcoreLib {
   abiVersion(): number
   chainsHex(chunks: string, counts: ArrayLike<number>): string
   wotsAddress(key: string): string
+  wotsAddressV2?(key: string): string
   mlkemKeypair(set: KemSet, seed: Uint8Array): { publicKey: Uint8Array; secretKey: Uint8Array }
   mlkemEncaps(set: KemSet, publicKey: Uint8Array, coins: Uint8Array): { cipherText: Uint8Array; sharedSecret: Uint8Array }
   mlkemDecaps(set: KemSet, cipherText: Uint8Array, secretKey: Uint8Array): Uint8Array
@@ -128,6 +129,19 @@ export function wotsAddress(key: string): string | null {
   }
   try {
     return k.wotsAddress(key)
+  } catch {
+    return null
+  }
+}
+
+/** WOTS+ address (64 hex) of an 8192-character lowercase-hex OTS v2 key; null when the binding lacks it. */
+export function wotsAddressV2(key: string): string | null {
+  const k = ensure()
+  if (k === null || typeof k.wotsAddressV2 !== 'function' || typeof key !== 'string' || key.length !== 8192 || !HEX.test(key)) {
+    return null
+  }
+  try {
+    return k.wotsAddressV2(key)
   } catch {
     return null
   }

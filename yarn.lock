@@ -1123,7 +1123,7 @@ __metadata:
     "@typescript-eslint/parser": "npm:^8.67.0"
     "@urql/core": "npm:^6.0.3"
     "@vitest/coverage-v8": "npm:^4.1.11"
-    "@wishknish/knishio-kcore": "npm:^0.1.0"
+    "@wishknish/knishio-kcore": "npm:^0.2.0"
     eslint: "npm:^10"
     graphql: "npm:^16.14.2"
     graphql-ws: "npm:^6.2.1"
@@ -1142,10 +1142,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@wishknish/knishio-kcore@npm:^0.1.0":
-  version: 0.1.0
-  resolution: "@wishknish/knishio-kcore@npm:0.1.0"
-  checksum: 10c0/7bd818986c648bdfdf38ceeecdffd2e38307ddad8c60de94eaa2f5624e3e8c602d0caed842cf501b7769bdc7249bf56d5edb07923c176c6cfa6c158b861780e9
+"@wishknish/knishio-kcore@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@wishknish/knishio-kcore@npm:0.2.0"
+  checksum: 10c0/ffdc0a90bc6513cef45d7bf707e87783f0fcb21f04e2aee0bcebcef6d661b29b4d0c86485b4258da54aab9508856267bedef98050262ccfd890dd190104bc0c1
   languageName: node
   linkType: hard
 

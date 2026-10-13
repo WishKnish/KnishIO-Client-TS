@@ -89,6 +89,18 @@ describe.skipIf(!KCORE_ON)('kcore parity with the built-in implementation', () =
     expect(viaKcore).toEqual(builtIn)
   })
 
+  it('Wallet.generateAddress agrees for 20 OTS v2 keys', () => {
+    const keys = Array.from({ length: 20 }, (_, i) => hexKey(`v2-${i}`).repeat(4))
+    const viaKcore = under('on', () => keys.map(key => {
+      expect(kcore.wotsAddressV2(key)).not.toBeNull()
+      expect(kcore.wotsAddress(key)).toBeNull()
+      return Wallet.generateAddress(key)
+    }))
+    const builtIn = under('off', () => keys.map(key => Wallet.generateAddress(key)))
+
+    expect(viaKcore).toEqual(builtIn)
+  })
+
   it('generateOTSSignature and verifyOTSSignature agree', () => {
     const key = hexKey('kcore-sign')
     const hash = createHash('sha3-256').update('kcore-sign').digest('hex')

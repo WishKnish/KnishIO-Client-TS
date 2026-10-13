@@ -334,10 +334,10 @@ export default class Wallet {
    * Matches JavaScript SDK Wallet.generateAddress exactly
    */
   static generateAddress(key: string): string {
-    const viaKcore = kcore.wotsAddress(key)
+    const viaKcore = key.length === 8192 ? kcore.wotsAddressV2(key) : kcore.wotsAddress(key)
     if (viaKcore !== null) return viaKcore
 
-    // kcore's address entry point takes v1 keys only; its chain primitive takes the 64 v2 chains
+    // A binding without the v2 address entry point still computes the 64 v2 chains
     const endpoints = key.length === 8192 ? kcore.chainsHex(key, new Array<number>(64).fill(16)) : null
     if (endpoints !== null) {
       return shake256(shake256(endpoints, 8192), 256)
