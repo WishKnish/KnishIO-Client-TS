@@ -98,7 +98,7 @@ export default class Wallet {
   public tradeRates: Record<string, any>
   public molecules: Record<string, any>
   public mlKemParameterSet: 1024 | 768
-  public readonly otsVersion: 1 | 2
+  public otsVersion: 1 | 2
 
   // Token metadata (populated from query responses)
   public tokenName?: string
@@ -221,6 +221,57 @@ export default class Wallet {
       mlKemParameterSet,
       otsVersion
     })
+  }
+
+  /**
+   * Sets the OTS version of a wallet that holds no key (e.g. a wallet rebuilt from ledger data).
+   * A keyed wallet keeps the version its key was derived at.
+   */
+  setOtsVersion(otsVersion: unknown): this {
+    const version = checkedOtsVersion(otsVersion)
+    if (this.key && version !== this.otsVersion) {
+      throw new Error('KnishIO: cannot change the OTS version of a keyed wallet.')
+    }
+    this.otsVersion = version
+    return this
+  }
+
+  /**
+   * Validates an OTS version (1 or 2) and returns it as a number.
+   */
+  static checkedOtsVersion(otsVersion: unknown): 1 | 2 {
+    return checkedOtsVersion(otsVersion)
+  }
+
+  /**
+   * The OTS version whose key, derived from secret, token and position, has the given address.
+   * Tries `preferred` first, then the other version.
+   */
+  static detectOtsVersion({
+    secret,
+    token,
+    position,
+    address,
+    preferred = DEFAULT_OTS_VERSION
+  }: {
+    secret: string | null | undefined
+    token: string
+    position: string | null | undefined
+    address: string | null | undefined
+    preferred?: 1 | 2
+  }): 1 | 2 | null {
+    if (!secret || !position || !address) {
+      return null
+    }
+    const first = checkedOtsVersion(preferred)
+    const wanted = address.toLowerCase()
+    for (const otsVersion of [first, first === 1 ? 2 : 1] as const) {
+      const key = Wallet.generateKey({ secret, token, position, otsVersion })
+      if (Wallet.generateAddress(key) === wanted) {
+        return otsVersion
+      }
+    }
+    return null
   }
 
 

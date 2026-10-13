@@ -60,17 +60,20 @@ export default class MutationClaimShadowWallet extends MutationProposeMolecule {
    */
   override fillMolecule({
     token,
-    batchId = null
+    batchId = null,
+    otsVersion = 1
   }: {
     token: TokenSlug
     batchId?: string | null
+    otsVersion?: 1 | 2
   }): void {
-    // Create the wallet to claim
+    // Create the wallet to claim, keyed at the given OTS version
     const wallet = Wallet.create({
       secret: this.$__molecule.secret,
       bundle: this.$__molecule.bundle,
       token,
-      batchId
+      batchId,
+      otsVersion
     });
 
     // Initialize shadow wallet claim on the molecule

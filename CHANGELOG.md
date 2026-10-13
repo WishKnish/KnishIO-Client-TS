@@ -19,10 +19,17 @@ detail, the entry says so instead of guessing.
 
 - Opt-in OTS v2 signatures: 8192-hex keys with 64 WOTS+ chains (v1 keys stay 2048 hex, 16
   chains). `Wallet.generateKey({ ..., otsVersion })`, the `Wallet` constructor and
-  `Wallet.create` take `otsVersion` (`1` default, or `2`); `wallet.otsVersion` is read-only.
+  `Wallet.create` take `otsVersion` (`1` default, or `2`).
   Any other version throws `KnishIO: unsupported OTS version <n>; expected 1 or 2.`
 - `Molecule.signingOtsVersion()`: the source wallet's OTS version, or `1` without one.
 - `isSignableMolecularHash(hash)` and `assertSignableMolecularHash(hash)` in the crypto library.
+- **Client-level OTS version.** `new KnishIOClient({ …, otsVersion })` (1 default, or 2),
+  `getOtsVersion()` and `setOtsVersion()`. Keys the client creates from its secret (the first
+  source wallet, the AUTH wallet, `createWallet`, token and claim wallets) use it.
+- `Wallet.detectOtsVersion({ secret, token, position, address, preferred })`: the OTS version
+  whose derived address equals `address`, or `null`. `Wallet.checkedOtsVersion()`, and
+  `wallet.setOtsVersion()` for a wallet that holds no key.
+- `AuthToken` snapshots carry `wallet.otsVersion`; a snapshot without it restores at 1.
 
 ### Changed
 
@@ -40,6 +47,12 @@ detail, the entry says so instead of guessing.
   treats a secret or position as hex only when it is entirely `[0-9A-Fa-f]` (a `0x` prefix is
   hashed as text, as in the other SDKs). `KnishIOClient.getSourceWallet` re-derives an existing
   ContinuID wallet's key only when that wallet has a position.
+- Wallets the ledger returns for this client (the ContinuID head in `getSourceWallet()` and the
+  login pointer, `querySourceWallet()`, and the balance wallets `replenishToken()` and
+  `fuseToken()` sign from) are used at the OTS version their address was derived at.
+  `getSourceWallet()`, `querySourceWallet()` and those balance wallets throw
+  `WalletCredentialException` when neither version derives the address; the login pointer falls
+  back to an AUTH wallet as before.
 
 
 ## [1.4.0] — 2026-10-04

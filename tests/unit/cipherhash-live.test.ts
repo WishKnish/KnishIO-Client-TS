@@ -33,8 +33,10 @@ describe.skipIf(!runCipherHash)('CipherHash live ML-KEM round-trip (PQ Phase E)'
     // the plaintext baseline leg below a silent downgrade, which the validator rejects when
     // ENFORCE_ENCRYPTED_TRANSPORT is at its secure default.
     const mlKemParameterSet = process.env.CIPHERHASH_MLKEM_PARAMETER_SET ? (Number(process.env.CIPHERHASH_MLKEM_PARAMETER_SET) as 768 | 1024) : 1024
-    const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false, mlKemParameterSet })
+    const otsVersion = process.env.CIPHERHASH_OTS_VERSION === '2' ? 2 : 1
+    const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false, mlKemParameterSet, otsVersion })
     await client.requestAuthToken({ secret, encrypt: false })
+    expect(client.getAuthToken()?.getWallet()?.otsVersion).toBe(otsVersion)
 
     // Encrypted round-trip: the validator ML-KEM-decrypts the request, executes it, and encrypts
     // the response back to the client's ML-KEM pubkey, which the client decrypts.
@@ -58,8 +60,10 @@ describe.skipIf(!runCipherHash)('CipherHash live ML-KEM round-trip (PQ Phase E)'
   it('a session authenticated with encrypt: true is refused when it drops to plaintext', async () => {
     const secret = generateSecret()
     const mlKemParameterSet = process.env.CIPHERHASH_MLKEM_PARAMETER_SET ? (Number(process.env.CIPHERHASH_MLKEM_PARAMETER_SET) as 768 | 1024) : 1024
-    const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false, mlKemParameterSet })
+    const otsVersion = process.env.CIPHERHASH_OTS_VERSION === '2' ? 2 : 1
+    const client = new KnishIOClient({ uri: testUrl, cellSlug: 'public', logging: false, mlKemParameterSet, otsVersion })
     await client.requestAuthToken({ secret, encrypt: true })
+    expect(client.getAuthToken()?.getWallet()?.otsVersion).toBe(otsVersion)
 
     // The encrypted transport still works for this session.
     const encResp = await client.queryBalance({ token: 'USER' })

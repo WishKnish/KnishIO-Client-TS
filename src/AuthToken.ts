@@ -55,7 +55,8 @@ import Wallet from '@/core/Wallet'
  * `wallet.mlKemParameterSet` is optional because snapshots persisted before ML-KEM-1024 became
  * the default do not carry it — see {@link AuthToken.resolveMlKemParameterSet}. `wallet.token` is
  * optional because snapshots persisted before re-logins were signed from the USER ContinuID
- * wallet do not carry it; every such session was signed from an AUTH wallet.
+ * wallet do not carry it; every such session was signed from an AUTH wallet. `wallet.otsVersion`
+ * is optional because snapshots written before it existed were all OTS version 1.
  */
 export type AuthTokenSnapshot = {
   token: string
@@ -67,6 +68,7 @@ export type AuthTokenSnapshot = {
     position: string | null
     characters: string | null
     mlKemParameterSet?: 1024 | 768
+    otsVersion?: 1 | 2
   }
 }
 
@@ -132,6 +134,14 @@ export default class AuthToken {
   }
 
   /**
+   * OTS version a restored session's wallet must use: the snapshot's explicit field, or 1 for a
+   * snapshot written before the field existed (every such session was v1).
+   */
+  static resolveOtsVersion(snapshot: AuthTokenSnapshot): 1 | 2 {
+    return Wallet.checkedOtsVersion(snapshot.wallet?.otsVersion || 1)
+  }
+
+  /**
    * Restore AuthToken from snapshot
    */
   static restore(snapshot: AuthTokenSnapshot, secret: string): AuthToken {
@@ -140,7 +150,8 @@ export default class AuthToken {
       token: snapshot.wallet?.token ?? 'AUTH',
       position: snapshot.wallet?.position ?? null,
       characters: snapshot.wallet?.characters ?? null,
-      mlKemParameterSet: AuthToken.resolveMlKemParameterSet(snapshot)
+      mlKemParameterSet: AuthToken.resolveMlKemParameterSet(snapshot),
+      otsVersion: AuthToken.resolveOtsVersion(snapshot)
     })
 
     return AuthToken.create({
@@ -238,7 +249,8 @@ export default class AuthToken {
           token: this.$__wallet.token,
           position: this.$__wallet.position,
           characters: this.$__wallet.characters,
-          mlKemParameterSet: this.$__wallet.mlKemParameterSet
+          mlKemParameterSet: this.$__wallet.mlKemParameterSet,
+          otsVersion: this.$__wallet.otsVersion
         }
       } : {})
     }
