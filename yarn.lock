@@ -853,15 +853,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jssha@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "@types/jssha@npm:3.0.0"
-  dependencies:
-    jssha: "npm:*"
-  checksum: 10c0/3730e07c90a1ba2c0b4fe0b05071aab6af01c8071aa15883e7a81707bcca121b8f928cebbb01a1ac2e6da244017e997ad8db441e671d59d6b38f0ef6b00c2acc
-  languageName: node
-  linkType: hard
-
 "@types/node@npm:^26":
   version: 26.4.0
   resolution: "@types/node@npm:26.4.0"
@@ -1127,7 +1118,6 @@ __metadata:
   resolution: "@wishknish/knishio-client-ts@workspace:."
   dependencies:
     "@noble/post-quantum": "npm:^0.7.0"
-    "@types/jssha": "npm:^3.0.0"
     "@types/node": "npm:^26"
     "@typescript-eslint/eslint-plugin": "npm:^8.67.0"
     "@typescript-eslint/parser": "npm:^8.67.0"
@@ -1954,13 +1944,6 @@ __metadata:
   version: 1.0.1
   resolution: "json-stable-stringify-without-jsonify@npm:1.0.1"
   checksum: 10c0/cb168b61fd4de83e58d09aaa6425ef71001bae30d260e2c57e7d09a5fd82223e2f22a042dedaab8db23b7d9ae46854b08bb1f91675a8be11c5cffebef5fb66a5
-  languageName: node
-  linkType: hard
-
-"jssha@npm:*":
-  version: 3.3.1
-  resolution: "jssha@npm:3.3.1"
-  checksum: 10c0/dccd89d1cb9ffdf27e34edfff6ca261a0b130554839ae1a9601e6c959d050daaac8095f02971ee0e13c624c886cad3e0e4fc52b056f53251a99094fde2a41188
   languageName: node
   linkType: hard
 

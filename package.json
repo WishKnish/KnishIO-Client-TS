@@ -71,7 +71,6 @@
     "@wishknish/knishio-kcore": "^0.1.0"
   },
   "devDependencies": {
-    "@types/jssha": "^3.0.0",
     "@types/node": "^26",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",
