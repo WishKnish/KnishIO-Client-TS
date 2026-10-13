@@ -15,6 +15,8 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-13
+
 ### Added
 
 - Opt-in OTS v2 signatures: 8192-hex keys with 64 WOTS+ chains (v1 keys stay 2048 hex, 16
@@ -740,7 +742,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.4.0...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.5.0...HEAD
+[1.5.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.0
 [1.4.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.4.0
 [1.3.2]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.2
 [1.3.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.3.1
