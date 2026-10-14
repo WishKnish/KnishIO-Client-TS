@@ -114,6 +114,14 @@ jobs:
           KNISHIO_KCORE: require
         run: npm test
 
+      # Every exception class must reach the package root under its own name; a missing
+      # re-export or a bundler rename only shows in the built files.
+      - name: Build
+        run: npm run build
+
+      - name: Built package exports every exception class
+        run: node .github/scripts/check-dist.cjs
+
   changelog:
     name: changelog entry for version bump
     runs-on: ubuntu-latest

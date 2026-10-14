@@ -15,6 +15,14 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+### Fixed
+
+- The package root exports every exception class, including `SignatureMalformedException`, so
+  callers can catch each of them with `instanceof`. 20 of the 29 classes were not exported.
+- Each exception's `name` is its class name in the built package. 11 classes, including
+  `SignatureMismatchException`, previously reported a `_`-prefixed name (for example
+  `_SignatureMismatchException`).
+
 ## [1.5.0] — 2026-10-13
 
 ### Added
