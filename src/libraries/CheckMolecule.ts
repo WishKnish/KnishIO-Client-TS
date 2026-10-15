@@ -88,6 +88,17 @@ interface MoleculeStructure {
   normalizedHash(): number[]
 }
 
+const RFC3339_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+// Validators return createdAt as an RFC 3339 string; molecules are signed over epoch milliseconds.
+function toSignedTimestamp(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isSafeInteger(value) ? String(value) : null
+  if (typeof value !== 'string') return null
+  if (/^\d+$/.test(value)) return value
+  if (RFC3339_TIMESTAMP.test(value)) return String(Date.parse(value))
+  return value
+}
+
 /**
  * CheckMolecule class - Validates molecular integrity and signatures
  * Matches JavaScript SDK CheckMolecule functionality exactly
@@ -775,7 +786,7 @@ export default class CheckMolecule {
     bundleHash: string
     cellSlug?: string | null
     status?: string | null
-    createdAt?: string | null
+    createdAt?: string | number | null
     atoms?: any[]
   }): Molecule {
     const mappedAtoms = atoms.map((serverAtom: any) => {
@@ -805,7 +816,7 @@ export default class CheckMolecule {
         meta,
         index: serverAtom.index != null ? serverAtom.index : null,
         otsFragment: serverAtom.otsFragment || null,
-        createdAt: serverAtom.createdAt || null
+        createdAt: toSignedTimestamp(serverAtom.createdAt)
       }
     })
 
@@ -814,7 +825,7 @@ export default class CheckMolecule {
       bundle: bundleHash,
       cellSlug,
       status,
-      createdAt,
+      createdAt: toSignedTimestamp(createdAt),
       atoms: mappedAtoms
     })
   }
