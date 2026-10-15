@@ -113,4 +113,18 @@ describe('KnishIOClient Secret Storage Integration', () => {
     expect(client.getSecretStorage()).toBeNull()
     expect((client as any).$__bundle).toBe('')
   })
+
+  it('reset and deinitialize keep the cell slug', () => {
+    const client = new KnishIOClient({
+      uri: 'https://api.test.knish.io',
+      cellSlug: 'public'
+    })
+
+    client.deinitialize()
+    expect(client.getCellSlug()).toBe('public')
+
+    client.setCellSlug('other')
+    client.reset()
+    expect(client.getCellSlug()).toBe('other')
+  })
 })

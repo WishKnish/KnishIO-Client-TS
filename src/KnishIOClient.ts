@@ -439,7 +439,6 @@ export default class KnishIOClient {
     this.$__bundle = ''
     this.$__secretStorage = null
     this.$__encrypt = false
-    this.$__cellSlug = null
     this.$__authToken = null
     this.$__remainderWallet = null
     this.lastMoleculeQuery = null
