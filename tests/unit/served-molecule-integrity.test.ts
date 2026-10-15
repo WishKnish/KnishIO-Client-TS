@@ -17,7 +17,13 @@ interface ServedMolecule {
   createdAt?: string | number | null
   atoms: Array<Record<string, unknown>>
 }
-const fixture: { v1: ServedMolecule; v2: ServedMolecule } = JSON.parse(readFileSync(FIXTURE, 'utf8'))
+const fixture: { v1: ServedMolecule; v2: ServedMolecule; v2ts: ServedMolecule } = JSON.parse(readFileSync(FIXTURE, 'utf8'))
+
+function withAtomVersion (served: ServedMolecule, version: string): ServedMolecule {
+  const copy = structuredClone(served)
+  copy.atoms.forEach(atom => { atom.version = version })
+  return copy
+}
 
 describe('served molecules', () => {
   it.each(['v1', 'v2'] as const)('verifies the served %s molecule', (key) => {
@@ -25,6 +31,38 @@ describe('served molecules', () => {
 
     expect(result.error).toBeNull()
     expect(result.verified).toBe(true)
+  })
+
+  it('verifies a version-4 molecule served without atom versions', () => {
+    const result = CheckMolecule.verifyFromServerData(fixture.v2ts)
+
+    expect(result.error).toBeNull()
+    expect(result.verified).toBe(true)
+  })
+
+  it('verifies a version-4 molecule served with atom versions', () => {
+    const result = CheckMolecule.verifyFromServerData(withAtomVersion(fixture.v2ts, '4'))
+
+    expect(result.error).toBeNull()
+    expect(result.verified).toBe(true)
+  })
+
+  it('rejects a tampered version-4 molecule', () => {
+    const served = structuredClone(fixture.v2ts)
+    served.atoms[0].metasJson = (served.atoms[0].metasJson as string).replace('"f1"', '"f2"')
+
+    const result = CheckMolecule.verifyFromServerData(served)
+
+    expect(served.atoms[0].metasJson).toContain('"f2"')
+    expect(result.verified).toBe(false)
+    expect(result.error).toMatch(/hash/i)
+  })
+
+  it('does not fall back when a served atom carries a version', () => {
+    const result = CheckMolecule.verifyFromServerData(withAtomVersion(fixture.v1, '4'))
+
+    expect(result.verified).toBe(false)
+    expect(result.error).toMatch(/hash/i)
   })
 
   it.each([

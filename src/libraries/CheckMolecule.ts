@@ -72,6 +72,10 @@ import { base64ToHex, chunkSubstr } from '@/libraries/strings'
 import { shake256, isSignableMolecularHash } from '@/libraries/crypto'
 import * as kcore from '@/libraries/kcore'
 import Molecule from '@/core/Molecule'
+import type { AvailableVersions } from '@/versions'
+
+// Registered atom version used by versioned hashing (Version4)
+const VERSIONED_ATOM_HASH = '4' satisfies `${AvailableVersions}`
 
 // Type definitions for Molecule structure
 interface MoleculeStructure {
@@ -816,7 +820,8 @@ export default class CheckMolecule {
         meta,
         index: serverAtom.index != null ? serverAtom.index : null,
         otsFragment: serverAtom.otsFragment || null,
-        createdAt: toSignedTimestamp(serverAtom.createdAt)
+        createdAt: toSignedTimestamp(serverAtom.createdAt),
+        version: serverAtom.version ?? null
       }
     })
 
@@ -839,9 +844,21 @@ export default class CheckMolecule {
     verified: boolean
     error: string | null
   } {
+    const verify = (data: Parameters<typeof CheckMolecule.fromServerData>[0]) => {
+      new CheckMolecule(CheckMolecule.fromServerData(data) as unknown as MoleculeStructure).verify()
+    }
     try {
-      const molecule = CheckMolecule.fromServerData(moleculeData)
-      new CheckMolecule(molecule as unknown as MoleculeStructure).verify()
+      try {
+        verify(moleculeData)
+      } catch (error) {
+        // Molecules signed with versioned atoms were served without their version before
+        // validators stored it; retry with the registered version only when none was served.
+        const atoms: Array<Record<string, unknown>> = Array.isArray(moleculeData?.atoms) ? moleculeData.atoms : []
+        if (!(error instanceof MolecularHashMismatchException) || atoms.some(atom => atom?.version != null)) {
+          throw error
+        }
+        verify({ ...moleculeData, atoms: atoms.map(atom => ({ ...atom, version: VERSIONED_ATOM_HASH })) })
+      }
       return {
         molecularHash: moleculeData.molecularHash,
         verified: true,
