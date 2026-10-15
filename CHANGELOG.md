@@ -15,6 +15,14 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.5.4] — 2026-10-15
+
+### Fixed
+
+- `KnishIOClient` defaults `serverSdkVersion` to 3, as documented and as in the other SDKs, so
+  the molecules it builds carry unversioned atoms. Pass `serverSdkVersion: 4` to keep versioned
+  atom hashing.
+
 ## [1.5.3] — 2026-10-15
 
 ### Fixed
@@ -773,7 +781,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.5.3...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.5.4...HEAD
+[1.5.4]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.4
 [1.5.3]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.3
 [1.5.2]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.2
 [1.5.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.1
