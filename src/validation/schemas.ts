@@ -224,7 +224,7 @@ export const KnishIOClientConfigSchema = z.object({
   cellSlug: z.union([CellSlugSchema, z.string()]).optional(),
   client: z.unknown().optional(),
   socket: z.unknown().optional(),
-  serverSdkVersion: z.number().int().min(1).max(10).default(4),
+  serverSdkVersion: z.number().int().min(1).max(10).default(3),
   logging: z.boolean().default(false),
   // Optional default urql request policy for reads (server/sync clients pass
   // 'network-only'). Permitted by the strict schema so the constructor option

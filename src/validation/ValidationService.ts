@@ -421,7 +421,7 @@ export class ValidationService {
       warnings.push('Logging enabled - may impact performance')
     }
 
-    if (config.serverSdkVersion && config.serverSdkVersion < 4) {
+    if (config.serverSdkVersion && config.serverSdkVersion < 3) {
       warnings.push('Using older server SDK version - consider upgrading')
     }
 

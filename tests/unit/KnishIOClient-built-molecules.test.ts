@@ -31,6 +31,7 @@ type ProposedAtom = {
   metaType: string | null
   metaId: string | null
   meta: { key: string, value: string | null }[]
+  version?: string | null
 }
 
 let secret: string
@@ -105,6 +106,24 @@ describe('replenishToken', () => {
     expect(metaOf(cAtom, 'address')).toMatch(/^[0-9a-f]{64}$/)
     expect(metaOf(cAtom, 'address')).not.toBe(cAtom.walletAddress)
     expect(metaOf(cAtom, 'position')).not.toBe(CONTINUID_POSITION)
+  })
+})
+
+describe('atom version', () => {
+  it('defaults the server SDK version to 3', () => {
+    expect(client.getServerSdkVersion()).toBe(3)
+  })
+
+  it('signs unversioned atoms by default', async () => {
+    const existing = Wallet.create({ secret, token: 'REPL' })
+    existing.balance = '1000'
+    stubBalance(existing)
+
+    await client.replenishToken({ token: 'REPL', amount: 500 })
+
+    const atoms = proposedAtoms()
+    expect(atoms.length).toBeGreaterThan(0)
+    expect(atoms.map(atom => atom.version ?? null)).toEqual(atoms.map(() => null))
   })
 })
 

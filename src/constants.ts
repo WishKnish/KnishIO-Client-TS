@@ -158,7 +158,7 @@ export const HASH_LENGTHS = {
  * SDK version and protocol constants
  */
 export const PROTOCOL_CONFIG = {
-  DEFAULT_SDK_VERSION: 4,
+  DEFAULT_SDK_VERSION: 3,
   SUPPORTED_SDK_VERSIONS: [3, 4, 5],
   DEFAULT_TOKEN: 'USER',
   MAX_BATCH_SIZE: 1000,
