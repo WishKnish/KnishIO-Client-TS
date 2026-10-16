@@ -17,7 +17,6 @@
     "outDir": "./dist",
     "removeComments": true,
     "importHelpers": true,
-    "downlevelIteration": true,
     "newLine": "lf",
 
     // JavaScript Support
@@ -72,7 +71,10 @@
     "preserveSymlinks": false,
     "preserveWatchOutput": true,
 
-    // Path mapping for internal modules
+    // Path mapping for internal modules. "baseUrl" is deprecated in TypeScript 6, but tsup
+    // 8.5's dts build sets baseUrl itself (rollup.js: `baseUrl: compilerOptions.baseUrl || "."`),
+    // so the dts build fails with TS5101 even without it here; ignoreDeprecations covers both.
+    "ignoreDeprecations": "6.0",
     "baseUrl": "./src",
     "paths": {
       "@/*": ["*"],
@@ -86,7 +88,10 @@
       "@/subscribe/*": ["subscribe/*"],
       "@/instance/*": ["instance/*"],
       "@/versions/*": ["versions/*"]
-    }
+    },
+
+    // Ambient types: TypeScript 6 defaults "types" to [], so name the Node globals
+    "types": ["node"]
   },
   "include": [
     "src/**/*",

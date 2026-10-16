@@ -15,6 +15,11 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+### Changed
+
+- Node.js 22.12 or newer is required (`engines.node >=22.12.0`); Node.js 20 reached end of life
+  on 2026-04-30.
+
 ## [1.5.5] — 2026-10-16
 
 ### Fixed

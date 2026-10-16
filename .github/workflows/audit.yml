@@ -71,10 +71,10 @@ jobs:
           fi
           echo "OK: no credential in .git/config"
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
-          node-version: '20'
+          node-version: '22'
           # setup-node v5 caches by default and detects yarn from the committed .yarnrc.yml,
           # but this workflow resolves with npm, so yarn's cache folder never exists and the
           # post-run save fails with 'Path Validation Error'. Nothing to cache here.

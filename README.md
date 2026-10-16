@@ -16,8 +16,8 @@ The SDK can be installed via either of the following:
 2. `npm install @wishknish/knishio-client-ts --save`
 
 **Requirements:**
-- Node.js 18 or higher
-- TypeScript 5.6 or higher (for development)
+- Node.js 22.12 or higher
+- TypeScript 6.0 or higher (for development)
 
 ## Basic Usage
 

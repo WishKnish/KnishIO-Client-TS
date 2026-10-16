@@ -34,16 +34,16 @@ jobs:
   verify:
     name: verify version + lint + typecheck + test + build (node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    # The release gate must be at least as strict as ci.yml, which runs Node 20. When this job
+    # The release gate must be at least as strict as ci.yml, which runs Node 22. When this job
     # ran only Node 24 it green-lit 0.9.6 with a `Promise.withResolvers` call (Node 22+) in a
     # test, which then failed ci.yml on Node 20 *after* the package had already published.
-    # 20 is the lowest version the toolchain can run (vitest requires ^20 || ^22 || >=24), so it
-    # is the floor this suite can actually enforce; the package's own `engines.node: >=18.0.0`
-    # applies to consumers and is upheld in source by feature guards, not by this matrix.
+    # 22 is the lowest version the toolchain can run (vitest 5 requires ^22.12 || ^24 || >=26),
+    # and the package's own `engines.node: >=22.12.0` is the same floor, so this matrix enforces
+    # what consumers are promised.
     strategy:
       fail-fast: false
       matrix:
-        node: ['20', '24']
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

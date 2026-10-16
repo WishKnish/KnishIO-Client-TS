@@ -48,10 +48,10 @@ jobs:
           fi
           echo "OK: no credential in .git/config"
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
-          node-version: '20'
+          node-version: '22'
           # setup-node v5 enables package-manager caching by default (v4 did not). It detects
           # yarn from the committed .yarnrc.yml and points the cache at yarn's cache folder —
           # but this workflow installs with `npm install`, so that folder never exists and the

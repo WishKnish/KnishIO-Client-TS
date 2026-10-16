@@ -79,12 +79,13 @@ describe('GraphQLClient wires a real timeout into the request', () => {
 })
 
 // Runtime floors differ between the shipped package and this suite, and both matter here:
-//   - the package declares `engines.node: >=18.0.0`, and `AbortSignal.any` only exists from 18.17,
-//     so `src/libraries/GraphQLClient.ts:158` guards on it and falls back to urql's own signal;
-//   - this suite cannot run below Node 20 regardless (vitest requires ^20 || ^22 || >=24), so the
-//     composition below is always exercisable here and is never conditionally skipped.
-// Nothing in this file may use an API above the *package* floor even so — `Promise.withResolvers`
-// is Node 22+, and using it here is what turned CI red on Node 20 after 0.9.6.
+//   - the package declares `engines.node: >=22.12.0`, and `AbortSignal.any` only exists from 18.17,
+//     so `src/libraries/GraphQLClient.ts:158` guards on it (for other runtimes) and falls back to
+//     urql's own signal;
+//   - this suite cannot run below Node 22.12 regardless (vitest 5 requires ^22.12 || ^24 || >=26),
+//     so the composition below is always exercisable here and is never conditionally skipped.
+// Nothing in this file may use an API above the *package* floor even so — using
+// `Promise.withResolvers` (Node 22+) while the floor was Node 20 is what turned CI red after 0.9.6.
 describe('the AbortSignal.any composition the client relies on', () => {
   it('is available in this runtime', () => {
     expect(typeof AbortSignal.any).toBe('function')
