@@ -15,6 +15,8 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-16
+
 ### Changed
 
 - Node.js 22.12 or newer is required (`engines.node >=22.12.0`); Node.js 20 reached end of life
@@ -794,7 +796,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.5.5...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.6.0...HEAD
+[1.6.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.6.0
 [1.5.5]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.5
 [1.5.4]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.4
 [1.5.3]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.3
