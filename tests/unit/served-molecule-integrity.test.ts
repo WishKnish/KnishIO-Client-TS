@@ -17,9 +17,9 @@ interface ServedMolecule {
   createdAt?: string | number | null
   atoms: Array<Record<string, unknown>>
 }
-const fixture: { v1: ServedMolecule; v2: ServedMolecule; v2ts: ServedMolecule } = JSON.parse(readFileSync(FIXTURE, 'utf8'))
+const fixture: { v1: ServedMolecule; v2: ServedMolecule; v2ts: ServedMolecule; v3rust: ServedMolecule } = JSON.parse(readFileSync(FIXTURE, 'utf8'))
 
-function withAtomVersion (served: ServedMolecule, version: string): ServedMolecule {
+function withAtomVersion (served: ServedMolecule, version: string | null): ServedMolecule {
   const copy = structuredClone(served)
   copy.atoms.forEach(atom => { atom.version = version })
   return copy
@@ -60,6 +60,28 @@ describe('served molecules', () => {
 
   it('does not fall back when a served atom carries a version', () => {
     const result = CheckMolecule.verifyFromServerData(withAtomVersion(fixture.v1, '4'))
+
+    expect(result.verified).toBe(false)
+    expect(result.error).toMatch(/hash/i)
+  })
+
+  it('v3rust molecule served with atom version 3 verifies', () => {
+    const result = CheckMolecule.verifyFromServerData(fixture.v3rust)
+
+    expect(result).toMatchObject({ verified: true, error: null })
+  })
+
+  it('v3rust molecule served without atom versions verifies (version 3 fallback)', () => {
+    const result = CheckMolecule.verifyFromServerData(withAtomVersion(fixture.v3rust, null))
+
+    expect(result).toMatchObject({ verified: true, error: null })
+  })
+
+  it.each([['3'], [null]] as const)('tampered v3rust fails (atom version %s)', (version) => {
+    const served = withAtomVersion(fixture.v3rust, version)
+    served.atoms[0].metaId = 'rust-pre-tampered'
+
+    const result = CheckMolecule.verifyFromServerData(served)
 
     expect(result.verified).toBe(false)
     expect(result.error).toMatch(/hash/i)

@@ -56,7 +56,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 
 import { convertToBase17 } from '@/libraries/crypto'
 import JsSHA from 'jssha'
-import versions from '@/versions'
+import Version4 from '@/versions/Version4'
 import { handleIsotope, isWalletAddress, isPosition } from '@/types/guards'
 import Meta from '@/core/Meta'
 import AtomMeta from '@/core/AtomMeta'
@@ -200,8 +200,9 @@ export default class Atom {
     this.meta = meta ? Meta.normalizeMeta(meta) as AtomMetaData[] : []
     this.otsFragment = otsFragment
     this.index = index
-    // Match JS SDK: only set version if it exists in the version registry
-    if (version !== null && version !== undefined && Object.prototype.hasOwnProperty.call(versions as Record<string, any>, version)) {
+    // Match the validator: keep any served version; every atom carrying one selects
+    // versioned (Version4-structured) hashing, whatever its value
+    if (version !== null && version !== undefined) {
       this.version = String(version)
     }
     // Match JS SDK: always generate fresh createdAt (JS SDK has no createdAt parameter)
@@ -579,12 +580,12 @@ export default class Atom {
     const atomList = Atom.sortAtoms(atoms)
     const molecularSponge = new JsSHA('SHAKE256', 'TEXT')
 
-    // Step 2: Check for versioned hashing (matches JS SDK Atom.hashAtoms lines 365-366)
-    const versionRegistry = versions as Record<number | string, any>
-    if (atomList.every(atom => atom.version && Object.prototype.hasOwnProperty.call(versionRegistry, atom.version))) {
+    // Step 2: versioned hashing when every atom carries a version, whatever its value
+    // (the validator's rule; the version string itself is part of the hashed view)
+    if (atomList.every(atom => atom.version !== null && atom.version !== undefined)) {
       // Versioned path: create structured view of each atom and hash as JSON
       molecularSponge.update(JSON.stringify(
-        atomList.map(atom => versionRegistry[atom.version!].create(atom).view())
+        atomList.map(atom => Version4.create(atom).view())
       ))
     } else {
       // Legacy path: field-by-field with incremental SHAKE256 updates

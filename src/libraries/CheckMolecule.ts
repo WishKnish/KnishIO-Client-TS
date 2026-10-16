@@ -72,10 +72,9 @@ import { base64ToHex, chunkSubstr } from '@/libraries/strings'
 import { shake256, isSignableMolecularHash } from '@/libraries/crypto'
 import * as kcore from '@/libraries/kcore'
 import Molecule from '@/core/Molecule'
-import type { AvailableVersions } from '@/versions'
 
-// Registered atom version used by versioned hashing (Version4)
-const VERSIONED_ATOM_HASH = '4' satisfies `${AvailableVersions}`
+// Atom versions retried, in order, for a molecule served without any atom version
+const UNSERVED_ATOM_VERSIONS = ['4', '3'] as const
 
 // Type definitions for Molecule structure
 interface MoleculeStructure {
@@ -852,12 +851,25 @@ export default class CheckMolecule {
         verify(moleculeData)
       } catch (error) {
         // Molecules signed with versioned atoms were served without their version before
-        // validators stored it; retry with the registered version only when none was served.
+        // validators stored it; when none was served, retry each signed version in order.
         const atoms: Array<Record<string, unknown>> = Array.isArray(moleculeData?.atoms) ? moleculeData.atoms : []
         if (!(error instanceof MolecularHashMismatchException) || atoms.some(atom => atom?.version != null)) {
           throw error
         }
-        verify({ ...moleculeData, atoms: atoms.map(atom => ({ ...atom, version: VERSIONED_ATOM_HASH })) })
+        let lastError: unknown = error
+        let verified = false
+        for (const version of UNSERVED_ATOM_VERSIONS) {
+          try {
+            verify({ ...moleculeData, atoms: atoms.map(atom => ({ ...atom, version })) })
+            verified = true
+            break
+          } catch (retryError) {
+            lastError = retryError
+          }
+        }
+        if (!verified) {
+          throw lastError
+        }
       }
       return {
         molecularHash: moleculeData.molecularHash,
