@@ -68,5 +68,14 @@ updates:
       # typescript-eslint release whose peer range admits the new typescript, and a Yarn release
       # whose builtin typescript patch supports it (check: `yarn add -D typescript@<ver>
       # --mode=skip-build` exits 0).
+      # typescript 6.0 errors on this repo's tsconfig: TS5101 for the deprecated
+      # "downlevelIteration" and "baseUrl", and TS2591 ("Cannot find name 'process'")
+      # in the dts build because "types" now defaults to []. Lift after the tsconfig
+      # is migrated and typecheck + build pass on 6.0.
       - dependency-name: "typescript"
-        versions: [">=6.1.0"]
+        versions: [">=6.0.0"]
+      # vitest 5 requires Node ^22.12 (engines); CI's test job runs Node 20, this SDK's floor. Lift when the floor moves to 22.
+      - dependency-name: "vitest"
+        versions: [">=5.0.0"]
+      - dependency-name: "@vitest/*"
+        versions: [">=5.0.0"]
