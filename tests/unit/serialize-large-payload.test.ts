@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import Wallet from '../../src/core/Wallet'
 
 /**
- * Production regression (knish-kits, 2026-07-21): uploading a deal document crashed with
+ * Regression seen in a downstream app (2026-07-21): uploading a large document crashed with
  * `RangeError: Maximum call stack size exceeded` in `serializeKey`. The old implementation
  * spread every byte of the AES-GCM ciphertext as a function argument
  * (`String.fromCharCode(...key)`), which exceeds the engine's argument limit (~64–125K)

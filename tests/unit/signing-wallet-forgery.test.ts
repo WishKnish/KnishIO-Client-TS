@@ -1,5 +1,5 @@
 /**
- * signingWallet meta forgery (WOTS+ mitigation plan §8 Phase 0.2)
+ * signingWallet meta forgery
  *
  * The fixture was built by the JS reference (@wishknish/knishio-client-js 1.2.1), whose
  * `check()` accepts both molecules:

@@ -5,7 +5,7 @@ import Wallet from '../../src/core/Wallet'
  * PQ-transport hardening (cycle 174): when a node advertises a non-ML-KEM `key` (e.g. a validator
  * predating the PQ-transport build returns a legacy ~48-byte value), `encryptMessage` must fail with
  * an actionable KnishIO error — NOT @noble's cryptic `"publicKey" expected Uint8Array of length 1184,
- * got length=48`. Regression seen live in knish-kits against a stale :8080 validator.
+ * got length=48`. Regression seen in a downstream app against a stale :8080 validator.
  */
 describe('ML-KEM encrypt guard', () => {
   const wallet = new Wallet({ secret: 'a1b2c3d4e5f6'.repeat(8), token: 'AUTH' })
