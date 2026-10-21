@@ -205,6 +205,10 @@ describe('client-level OTS version', () => {
     expect(() => clientAt(1).setOtsVersion(3 as never)).toThrow('KnishIO: unsupported OTS version 3; expected 1 or 2.')
   })
 
+  it('a client created without otsVersion is at version 2', () => {
+    expect(new KnishIOClient({ uri: 'http://127.0.0.1:9/graphql', logging: false }).getOtsVersion()).toBe(2)
+  })
+
   it('without a ContinuID, getSourceWallet creates a key at the client version', async () => {
     const client = clientAt(2)
     continuIdReturns(client, null)

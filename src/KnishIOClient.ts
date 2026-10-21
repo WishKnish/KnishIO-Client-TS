@@ -169,7 +169,7 @@ export default class KnishIOClient {
   private $__authToken: AuthToken | null = null
   private $__authInProcess: boolean = false
   private $__mlKemParameterSet: 1024 | 768 = 1024
-  private $__otsVersion: 1 | 2 = 1
+  private $__otsVersion: 1 | 2 = 2
   private $__remainderWallet: Wallet | null = null
   private lastMoleculeQuery: Mutation | null = null
   private abortControllers: Map<string, AbortController> = new Map()
@@ -246,7 +246,7 @@ export default class KnishIOClient {
       logging,
       defaultRequestPolicy,
       mlKemParameterSet: config.mlKemParameterSet ?? 1024,
-      otsVersion: config.otsVersion ?? 1
+      otsVersion: config.otsVersion ?? 2
     })
 
     if (config.secretStorage) {
@@ -266,7 +266,7 @@ export default class KnishIOClient {
     logging = false,
     defaultRequestPolicy = null,
     mlKemParameterSet = 1024,
-    otsVersion = 1
+    otsVersion = 2
   }: {
     uri: string | string[]
     cellSlug?: string | null
@@ -325,10 +325,10 @@ export default class KnishIOClient {
   }
 
   /**
-   * OTS version of the keys this client creates from its secret (1 default, or 2)
+   * OTS version of the keys this client creates from its secret (2 default, or 1)
    */
   getOtsVersion(): 1 | 2 {
-    return this.$__otsVersion || 1
+    return this.$__otsVersion || 2
   }
 
   /**
