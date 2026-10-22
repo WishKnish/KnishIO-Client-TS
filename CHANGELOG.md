@@ -15,11 +15,15 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-10-21
+
 ### Changed
 
-- `KnishIOClient` creates keys and signs at OTS version 2 by default (was 1). An identity a
-  version-2 client signs for moves to version 2 and stays there, so the client needs a validator
-  that accepts version 2 (0.8.0 or later). Pass `otsVersion: 1` to keep version 1. Standalone
+- `KnishIOClient` defaults to OTS version 2 and ML-KEM-1024. It creates keys and signs at OTS
+  version 2 (was 1); ML-KEM-1024 stays the post-quantum transport parameter set, as it has been
+  by default since 1.0.0 (ML-KEM-768 remains the opt-in step-back). An identity a version-2
+  client signs for moves to version 2 and stays there, so the client needs a validator that
+  accepts version 2 (0.8.0 or later). Pass `otsVersion: 1` to keep version 1. Standalone
   `Wallet` construction still defaults to version 1.
 
 ## [1.6.0] — 2026-10-16
@@ -803,7 +807,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.6.0...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.7.0...HEAD
+[1.7.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.7.0
 [1.6.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.6.0
 [1.5.5]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.5
 [1.5.4]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.4
