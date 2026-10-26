@@ -15,6 +15,11 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+### Added
+
+- CI generates a CycloneDX SBOM of the published dependency graph (`.github/scripts/sbom.sh`) and scans it
+  with OSV on every push and weekly. Each GitHub Release attaches it as `knishio-client-ts-<version>.cdx.json`.
+
 ## [1.7.0] — 2026-10-21
 
 ### Changed

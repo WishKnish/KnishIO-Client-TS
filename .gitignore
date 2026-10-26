@@ -135,4 +135,6 @@ dist
 
 # npm artifact when yarn is canonical
 package-lock.json
+# CycloneDX SBOM output (.github/scripts/sbom.sh)
+/sbom-out/
 

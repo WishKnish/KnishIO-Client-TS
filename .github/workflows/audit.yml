@@ -102,3 +102,59 @@ jobs:
       # as the resolve: see the ci.yml audit step.
       - name: npm audit (full tree, low and above)
         run: npm audit --audit-level=low --before="$CUTOFF"
+
+  sbom:
+    name: SBOM (CycloneDX) + OSV scan
+    runs-on: ubuntu-latest
+    steps:
+      # `if: inputs.selftest_fail` reads the DECLARED BOOLEAN directly. Do not "fix" this to
+      # `== 'true'`: GitHub coerces mismatched types to number for loose equality, the string
+      # 'true' casts to NaN, and NaN equals nothing — so that form is always false and the
+      # probe would silently never fire. The input is used only inside this expression and is
+      # never interpolated into shell text.
+      - name: Selftest failure probe
+        if: inputs.selftest_fail
+        run: |
+          echo "::error::Selftest failure probe requested — failing this run deliberately."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '22'
+          # setup-node v5 enables package-manager caching by default (v4 did not). It detects
+          # yarn from the committed .yarnrc.yml and points the cache at yarn's cache folder —
+          # but this workflow installs with `npm install`, so that folder never exists and the
+          # post-run cache save fails with 'Path Validation Error'. Nothing to cache here.
+          package-manager-cache: false
+
+      - name: Resolve dependencies (script-free, 7-day cooldown)
+        run: |
+          set -euo pipefail
+          CUTOFF="$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          # Named cooldown exception — see the identical block in ci.yml for the full rationale.
+          # @wishknish/knishio-kcore@0.2.0 (first-party optionalDependency), published
+          # 2026-10-13T19:59:49Z. Without the floor the resolve drops it and the audit misses it.
+          # SELF-EXPIRING after 2026-10-20T20:00Z.
+          FLOOR='2026-10-13T20:00:00Z'
+          if [ "$CUTOFF" \< "$FLOOR" ]; then CUTOFF="$FLOOR"; fi
+          echo "cooldown cutoff: $CUTOFF"
+          npm install --package-lock-only --ignore-scripts --before="$CUTOFF"
+          echo "CUTOFF=$CUTOFF" >> "$GITHUB_ENV"
+
+      - name: Generate SBOM
+        run: bash .github/scripts/sbom.sh
+
+      - name: Export SBOM paths
+        run: cat sbom-out/paths.env >> "$GITHUB_ENV"
+
+      - name: OSV scan
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36  # v2.7.0
+        with:
+          scan-args: |-
+            -L
+            ${{ env.SBOM_FILE }}
