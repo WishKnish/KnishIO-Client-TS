@@ -17,7 +17,7 @@ The SDK can be installed via either of the following:
 
 **Requirements:**
 - Node.js 22.12 or higher
-- TypeScript 6.0 or higher (for development)
+- TypeScript 6.0 or higher and Node.js 22.18 or higher (for development; the tsup 9 build requires it)
 
 ## Basic Usage
 
