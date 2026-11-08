@@ -19,6 +19,13 @@ detail, the entry says so instead of guessing.
 
 - CI generates a CycloneDX SBOM of the published dependency graph (`.github/scripts/sbom.sh`) and scans it
   with OSV on every push and weekly. Each GitHub Release attaches it as `knishio-client-ts-<version>.cdx.json`.
+- `tests/unit/kcore-parity-vectors.test.ts` checks the 16 cross-SDK kcore parity vectors
+  (`tests/fixtures/kcore-parity-vectors.json`: metadata, value transfer, token creation and wallet
+  creation molecules at OTS v1 and v2, with unique and colliding `createdAt`). Each molecule must
+  verify (molecular hash and OTS) and re-sign to the same molecular hash and `otsFragment`s byte for
+  byte, under `KNISHIO_KCORE=off` and under `KNISHIO_KCORE=require`. CI runs the vitest suite under
+  both (`Vitest (kcore off)` now pins `KNISHIO_KCORE=off`, so the built-in path runs even though
+  kcore is installed).
 
 ## [1.7.0] — 2026-10-21
 

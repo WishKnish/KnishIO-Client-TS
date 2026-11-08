@@ -105,9 +105,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # vitest unit suites. `npm test` is one-shot (`vitest run`, cycle 126); the local
-      # watch variant is `npm run test:watch`.
-      - name: Vitest
+      # vitest unit suites on the built-in (pure) path. `npm test` is one-shot (`vitest run`,
+      # cycle 126); the local watch variant is `npm run test:watch`. kcore is installed as an
+      # optionalDependency, so the default (auto) would load it and the pure path would never run
+      # in CI; KNISHIO_KCORE=off pins it.
+      - name: Vitest (kcore off)
+        env:
+          KNISHIO_KCORE: 'off'
         run: npm test
 
       # The same suite with kcore mandatory: @wishknish/knishio-kcore is an optionalDependency,
