@@ -27,6 +27,21 @@ detail, the entry says so instead of guessing.
   both (`Vitest (kcore off)` now pins `KNISHIO_KCORE=off`, so the built-in path runs even though
   kcore is installed).
 
+### Security
+
+- `Wallet.decryptMessage` and the encrypted transport's reply decryption no longer log the ML-KEM
+  shared secret, the ciphertext or the decrypted bytes when a decryption fails. Only the error and
+  the wallet's public key are logged.
+- A reply to a request the client sent in the CipherHash envelope is accepted only if it is an
+  envelope that decrypts for this wallet, or a reply without `data` (the validator's errors-only
+  reply, passed through unchanged). Plaintext `data` raises `CipherHash: plaintext reply to an
+  encrypted request`, an envelope that does not decrypt raises `CipherHash: reply could not be
+  decrypted`, and a non-JSON 2xx body raises `CipherHash: reply is not valid JSON`. Before, a
+  plaintext reply was returned as if it had come through the encrypted transport, and an envelope
+  that did not decrypt was returned still encrypted. Bypassed operations (`__schema`, `ContinuId`,
+  `AccessToken`, U-isotope `ProposeMolecule`) are not affected. The PHP and C SDKs already applied
+  this rule.
+
 ## [1.7.0] — 2026-10-21
 
 ### Changed

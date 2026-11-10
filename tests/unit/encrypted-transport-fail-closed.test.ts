@@ -25,16 +25,19 @@ const BALANCE_QUERY = 'query B { Balance(token: "USER") { address } }'
 const INTROSPECTION_QUERY = 'query { __schema { types { name } } }'
 
 let sent: Array<{ url: string; body: BodyInit | null | undefined }>
+/** What the stub validator answers; reset before each test, overridden per test. */
+let reply: { body: string; status: number }
 let originalFetch: typeof globalThis.fetch
 
 beforeEach(() => {
   sent = []
+  reply = { body: JSON.stringify({ data: {} }), status: 200 }
   originalFetch = globalThis.fetch
   const stub = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     sent.push({ url: String(input), body: init?.body })
     return Promise.resolve(
-      new Response(JSON.stringify({ data: {} }), {
-        status: 200,
+      new Response(reply.body, {
+        status: reply.status,
         headers: { 'content-type': 'application/json' }
       })
     )
@@ -108,5 +111,54 @@ describe('an encryption-enabled client WITH transport keys', () => {
     expect(body.query).toContain('CipherHash')
     expect(typeof body.variables.Hash).toBe('string')
     expect(String(sent[0]!.body)).not.toContain('Balance')
+  })
+})
+
+/**
+ * The reply to a wrapped request fails closed too (same rule as PHP Cipher.php and C client.c):
+ * it must be a CipherHash envelope that decrypts, or an errors-only reply. A plaintext `data`
+ * reply used to be handed to the caller as if it had come through the encrypted transport.
+ */
+describe('the reply to an encrypted request', () => {
+  const keyedClient = (): GraphQLClient => {
+    const wallet = new Wallet({ secret: SECRET, token: 'AUTH' })
+    const client = new GraphQLClient({ serverUri: SERVER_URI, encrypt: true })
+    client.setAuthData({ token: 'T', pubkey: wallet.pubkey as string, wallet })
+    return client
+  }
+
+  it('rejects a plaintext data reply to an encrypted request', async () => {
+    reply = { body: JSON.stringify({ data: { Balance: { address: 'x' } } }), status: 200 }
+
+    const response = await keyedClient().query({ query: BALANCE_QUERY, variables: {} })
+
+    expect(networkErrorMessage(response)).toBe('CipherHash: plaintext reply to an encrypted request')
+    expect(response.data).toBeUndefined()
+  })
+
+  it('passes an errors-only reply through', async () => {
+    const message = 'CipherHash: no envelope addressed to the validator'
+    reply = { body: JSON.stringify({ data: null, errors: [{ message }] }), status: 200 }
+
+    const response = await keyedClient().query({ query: BALANCE_QUERY, variables: {} })
+
+    expect(networkErrorMessage(response)).toContain(message)
+  })
+
+  it('rejects an envelope that does not decrypt', async () => {
+    reply = { body: JSON.stringify({ data: { CipherHash: { hash: '{}' } } }), status: 200 }
+
+    const response = await keyedClient().query({ query: BALANCE_QUERY, variables: {} })
+
+    expect(networkErrorMessage(response)).toBe('CipherHash: reply could not be decrypted')
+    expect(response.data).toBeUndefined()
+  })
+
+  it('rejects a non-JSON 200 reply', async () => {
+    reply = { body: 'not json', status: 200 }
+
+    const response = await keyedClient().query({ query: BALANCE_QUERY, variables: {} })
+
+    expect(networkErrorMessage(response)).toBe('CipherHash: reply is not valid JSON')
   })
 })

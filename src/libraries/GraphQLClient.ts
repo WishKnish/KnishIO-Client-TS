@@ -227,22 +227,47 @@ export default class GraphQLClient implements IGraphQLClient {
       return response
     }
 
-    // Decrypt the CipherHash response back to the inner GraphQL response JSON.
+    // Reply rule for a request this client wrapped (same as PHP Cipher.php and C client.c): the
+    // reply must be a CipherHash envelope that decrypts, or carry no `data` (an errors-only reply
+    // from the validator, passed through so its `errors` stay visible). Plaintext `data` on an
+    // encrypted request is refused: the validator never sends it, so it can only be a downgrade.
     const text = await response.text()
     const init2 = { status: response.status, statusText: response.statusText, headers: response.headers }
     let parsed: any
     try {
       parsed = JSON.parse(text)
     } catch (e) {
+      if (response.ok) {
+        throw new CodeException('CipherHash: reply is not valid JSON')
+      }
+      // A non-2xx non-JSON body is an HTTP error; leave it to urql's HTTP error handling.
       return new Response(text, init2)
     }
     const hash = parsed?.data?.CipherHash?.hash
-    if (typeof hash !== 'string') {
-      // Plaintext (e.g. a validator-side error response) — pass through unchanged.
+    if (typeof hash === 'string') {
+      let map: unknown
+      try {
+        map = JSON.parse(hash)
+      } catch (e) {
+        throw new CodeException('CipherHash: reply could not be decrypted')
+      }
+      if (typeof map !== 'object' || map === null || Array.isArray(map)) {
+        throw new CodeException('CipherHash: reply could not be decrypted')
+      }
+      // Unchecked cast: decryptMyMessageML returns null for a map with no entry for this wallet.
+      const envelopes = map as Record<string, { cipherText: string; encryptedMessage: string }>
+      // Not wrapped: an unavailable required kcore (`KcoreUnavailable`) must keep propagating.
+      const decrypted = await cipherWallet.decryptMyMessageML(envelopes)
+      if (decrypted == null) {
+        throw new CodeException('CipherHash: reply could not be decrypted')
+      }
+      return new Response(decrypted, init2)
+    }
+    const data = parsed && parsed.data
+    if (data == null || (typeof data === 'object' && Object.keys(data).length === 0)) {
       return new Response(text, init2)
     }
-    const decrypted = await cipherWallet.decryptMyMessageML(JSON.parse(hash))
-    return new Response(decrypted != null ? decrypted : text, init2)
+    throw new CodeException('CipherHash: plaintext reply to an encrypted request')
   }
 
   setAuthData({
