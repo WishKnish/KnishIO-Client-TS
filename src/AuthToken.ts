@@ -255,4 +255,11 @@ export default class AuthToken {
       } : {})
     }
   }
+
+  /**
+   * Snapshot for persistence; the JS SDK's name for toSnapshot()
+   */
+  getSnapshot(): AuthTokenSnapshot {
+    return this.toSnapshot()
+  }
 }

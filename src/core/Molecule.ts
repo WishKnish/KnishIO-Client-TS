@@ -492,6 +492,22 @@ export default class Molecule {
   }
 
   /**
+   * Sets the parent molecular hashes (DAG linkage) from a copy of `hashes`; anything but an array
+   * clears them (Molecule.js withParentHashes)
+   */
+  withParentHashes(hashes: string[]): Molecule {
+    this.parentHashes = Array.isArray(hashes) ? [...hashes] : []
+    return this
+  }
+
+  /**
+   * Synchronous signing; the JS SDK's name for sign()
+   */
+  signSync(options: Parameters<Molecule['sign']>[0] = {}): string | null {
+    return this.sign(options)
+  }
+
+  /**
    * Convert Hm to numeric notation via EnumerateMolecule(Hm)
    * Required by CheckMolecule for OTS validation
    */

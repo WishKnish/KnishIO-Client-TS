@@ -59,6 +59,7 @@
   ],
   "dependencies": {
     "@noble/post-quantum": "^0.7.0",
+    "@thumbmarkjs/thumbmarkjs": "^1.11.0",
     "@urql/core": "^6.0.3",
     "graphql": "^16.14.2",
     "graphql-ws": "^6.2.1",

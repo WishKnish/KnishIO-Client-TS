@@ -157,6 +157,32 @@ export { default as ResponseContinuId } from './response/ResponseContinuId'
 export { default as TokenUnit } from './core/TokenUnit'
 export { default as PolicyMeta } from './core/PolicyMeta'
 
+// Classes the JS SDK exports
+export { default as Decimal } from './libraries/Decimal'
+export { default as QueryActiveSession } from './query/QueryActiveSession'
+export { default as QueryBatchHistory } from './query/QueryBatchHistory'
+export { default as QueryMetaTypeViaMolecule } from './query/QueryMetaTypeViaMolecule'
+export { default as QueryPolicy } from './query/QueryPolicy'
+export { default as QueryToken } from './query/QueryToken'
+export { default as MutationActiveSession } from './mutation/MutationActiveSession'
+export { default as MutationClaimShadowWallet } from './mutation/MutationClaimShadowWallet'
+export { default as MutationCreateIdentifier } from './mutation/MutationCreateIdentifier'
+export { default as MutationCreateRule } from './mutation/MutationCreateRule'
+export { default as MutationDepositBufferToken } from './mutation/MutationDepositBufferToken'
+export { default as MutationLinkIdentifier } from './mutation/MutationLinkIdentifier'
+export { default as MutationRequestAuthorizationGuest } from './mutation/MutationRequestAuthorizationGuest'
+export { default as MutationWithdrawBufferToken } from './mutation/MutationWithdrawBufferToken'
+export { default as ResponseActiveSession } from './response/ResponseActiveSession'
+export { default as ResponseAuthorizationGuest } from './response/ResponseAuthorizationGuest'
+export { default as ResponseClaimShadowWallet } from './response/ResponseClaimShadowWallet'
+export { default as ResponseCreateIdentifier } from './response/ResponseCreateIdentifier'
+export { default as ResponseCreateRule } from './response/ResponseCreateRule'
+export { default as ResponseLinkIdentifier } from './response/ResponseLinkIdentifier'
+export { default as ResponseMetaTypeViaMolecule } from './response/ResponseMetaTypeViaMolecule'
+export { default as ResponsePolicy } from './response/ResponsePolicy'
+export { default as ResponseQueryActiveSession } from './response/ResponseQueryActiveSession'
+export { default as ResponseRequestAuthorizationGuest } from './response/ResponseRequestAuthorizationGuest'
+
 // =============================================================================
 // LIBRARY FUNCTIONS AND UTILITIES
 // =============================================================================

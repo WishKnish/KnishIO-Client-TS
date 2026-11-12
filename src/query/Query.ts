@@ -47,7 +47,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 */
 
 import { CodeException } from '@/exception'
-import type Response from '@/response/Response'
+import Response from '@/response/Response'
 import type { GraphQLClient } from '@/types'
 import type { TypedDocumentNode } from '@urql/core'
 
@@ -89,8 +89,6 @@ export default class Query {
    * Returns a Response object
    */
   createResponse(json: any): Response {
-    // Import here to avoid circular dependency
-    const Response = require('@/response/Response').default
     return new Response({
       query: this,
       json
@@ -176,7 +174,6 @@ export default class Query {
     } catch (error) {
       if ((error as any).name === 'AbortError') {
         this.knishIOClient.log('warn', 'Query was cancelled')
-        const Response = require('@/response/Response').default
         return new Response({
           query: this,
           json: { data: null, errors: [{ message: 'Query was cancelled' }] }

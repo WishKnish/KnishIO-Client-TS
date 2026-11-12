@@ -19,6 +19,18 @@ detail, the entry says so instead of guessing.
 
 - CI generates a CycloneDX SBOM of the published dependency graph (`.github/scripts/sbom.sh`) and scans it
   with OSV on every push and weekly. Each GitHub Release attaches it as `knishio-client-ts-<version>.cdx.json`.
+- Exports the classes the JS SDK exports and this package lacked: `Decimal`, `QueryActiveSession`,
+  `QueryBatchHistory`, `QueryMetaTypeViaMolecule`, `QueryPolicy`, `QueryToken`,
+  `MutationActiveSession`, `MutationClaimShadowWallet`, `MutationCreateIdentifier`,
+  `MutationCreateRule`, `MutationDepositBufferToken`, `MutationLinkIdentifier`,
+  `MutationRequestAuthorizationGuest`, `MutationWithdrawBufferToken`, `ResponseActiveSession`,
+  `ResponseAuthorizationGuest`, `ResponseClaimShadowWallet`, `ResponseCreateIdentifier`,
+  `ResponseCreateRule`, `ResponseLinkIdentifier`, `ResponseMetaTypeViaMolecule`, `ResponsePolicy`,
+  `ResponseQueryActiveSession`, `ResponseRequestAuthorizationGuest`.
+- `Molecule.withParentHashes`, `Molecule.signSync`, `Wallet.balanceAsNumber`,
+  `Wallet.balanceAsBigInt`, `Wallet.setBalanceBigInt`, `Wallet.setBalanceNumber` and
+  `AuthToken.getSnapshot` (the JS name for `toSnapshot`), as in the JS SDK.
+- `KnishIOClient.getFingerprint` and `getFingerprintData`.
 - `tests/unit/kcore-parity-vectors.test.ts` checks the 16 cross-SDK kcore parity vectors
   (`tests/fixtures/kcore-parity-vectors.json`: metadata, value transfer, token creation and wallet
   creation molecules at OTS v1 and v2, with unique and colliding `createdAt`). Each molecule must
@@ -74,6 +86,22 @@ detail, the entry says so instead of guessing.
   longer replaces the recipient wallet's batch id; `KnishIOClient.fuseToken` gives the recipient its
   batch id, as the JS SDK does. **Signed bytes change** for a `TokenUnit` with a name or metas; no
   other SDK produced the old bytes.
+- `requestGuestAuthToken` derives an AUTH wallet from the device fingerprint
+  (`getFingerprint`, ThumbmarkJS, as the JS SDK), sends its ML-KEM public key with `cellSlug` and
+  `encrypt`, binds the issued token to that wallet with `setAuthToken`, and raises
+  `AuthorizationRejectedException` when no token is issued. Before, it sent only `cellSlug` and kept
+  no token, so a guest session stayed unauthenticated and `encrypt: true` broke every later query.
+  New dependency: `@thumbmarkjs/thumbmarkjs` (the JS SDK's range, `^1.11.0`). The server key is
+  read from `pubkey`, the field the mutation selects (the legacy `key` is the fallback), and the
+  session's encrypt flag is the requested one when the reply carries none.
+- `queryToken` sends the token as `slug` (it was ignored), `queryMeta` asks for the latest values by
+  default (`latest = true`, as in JS), and `activeSession` sends `json` as a JSON string.
+- `cancelQuery` and `cancelAllQueries` reject the pending `executeQuery` call with an `AbortError`;
+  no `AbortController` was ever registered, so they did nothing. The HTTP request itself still runs
+  to completion (the transport replaces the fetch signal with its own).
+- `Query.createResponse` and the cancelled-request paths of `Query.execute` / `Mutation.execute`
+  failed with `Cannot find module '@/response/Response'` (a runtime `require` of a path alias);
+  they import `Response` statically.
 
 ## [1.7.0] — 2026-10-21
 

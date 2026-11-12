@@ -378,6 +378,36 @@ export default class Wallet {
   }
 
   /**
+   * The balance as a Number
+   */
+  balanceAsNumber(): number {
+    return Number(this.balance)
+  }
+
+  /**
+   * The integer part of the balance as a BigInt
+   */
+  balanceAsBigInt(): bigint {
+    const str = String(this.balance)
+    const intPart = str.includes('.') ? str.split('.')[0] : str
+    return BigInt(intPart || '0')
+  }
+
+  /**
+   * Sets the balance from a BigInt
+   */
+  setBalanceBigInt(value: bigint): void {
+    this.balance = value.toString()
+  }
+
+  /**
+   * Sets the balance from a Number
+   */
+  setBalanceNumber(value: number): void {
+    this.balance = String(value)
+  }
+
+  /**
    * Determines if the provided string is a bundle hash
    * Uses exhaustive type guard from types system
    * @param maybeBundleHash - String to check

@@ -53,6 +53,7 @@ import {
   generateSecret,
   generateBatchId
 } from '@/libraries/crypto'
+import { getFingerprint, getFingerprintData } from '@thumbmarkjs/thumbmarkjs'
 import Molecule from '@/core/Molecule'
 import Wallet from '@/core/Wallet'
 import TokenUnit from '@/core/TokenUnit'
@@ -109,6 +110,7 @@ import MutationReplenishToken from '@/mutation/MutationReplenishToken'
 
 // Response imports
 import ResponseProposeMolecule from '@/response/ResponseProposeMolecule'
+import ResponseRequestAuthorizationGuest from '@/response/ResponseRequestAuthorizationGuest'
 
 // Subscribe imports
 import CreateMoleculeSubscribe from '@/subscribe/CreateMoleculeSubscribe'
@@ -740,28 +742,49 @@ export default class KnishIOClient {
       })
     }
 
-    if (query instanceof MutationProposeMolecule) {
-      // Molecule submissions are writes — never cached, so no request-policy
-      // context applies; MutationProposeMolecule.execute takes only variables.
-      return await this.withMoleculeLock(async () => {
-        const response = await query.execute({ variables: variables || {} })
-        this.handlePositionDrift(response)
-        return response
-      })
+    // Register an AbortController for this request so cancelQuery / cancelAllQueries can abort it.
+    // The transport cannot take the signal (urql replaces the fetch signal with its own), so an
+    // abort rejects this call with an AbortError while the request itself runs to completion.
+    const abortController = new AbortController()
+    const queryKey = this.abortKey(query, variables)
+    this.abortControllers.set(queryKey, abortController)
+    // Executor form: the rejection is wired to an abort listener (ES2022 target has no withResolvers)
+    const aborted = new Promise<never>((_resolve, reject) => {
+      abortController.signal.addEventListener('abort', () => reject(abortController.signal.reason), { once: true })
+    })
+
+    const run = async (): Promise<Response | null> => {
+      if (query instanceof MutationProposeMolecule) {
+        // Molecule submissions are writes — never cached, so no request-policy
+        // context applies; MutationProposeMolecule.execute takes only variables.
+        return await this.withMoleculeLock(async () => {
+          const response = await query.execute({ variables: variables || {} })
+          this.handlePositionDrift(response)
+          return response
+        })
+      }
+
+      // Execute the query/mutation, forwarding any urql context (e.g.
+      // requestPolicy) assembled by the caller (queryMeta) / createQueryContext().
+      // When the caller did NOT specify a request policy, fall back to this
+      // client's defaultRequestPolicy (e.g. a long-lived server/sync client set
+      // to 'network-only' so it never serves a stale read from the urql cache —
+      // removing the footgun of having to pass network-only on every call).
+      // Precedence: per-call context.requestPolicy > client default > a query's
+      // own createQueryContext() (e.g. ContinuId) > urql default.
+      const effectiveContext = (this.$__defaultRequestPolicy && !(context as Record<string, any>).requestPolicy)
+        ? { requestPolicy: this.$__defaultRequestPolicy, ...context }
+        : context
+      return await query.execute({ variables: variables || {}, context: effectiveContext })
     }
 
-    // Execute the query/mutation, forwarding any urql context (e.g.
-    // requestPolicy) assembled by the caller (queryMeta) / createQueryContext().
-    // When the caller did NOT specify a request policy, fall back to this
-    // client's defaultRequestPolicy (e.g. a long-lived server/sync client set
-    // to 'network-only' so it never serves a stale read from the urql cache —
-    // removing the footgun of having to pass network-only on every call).
-    // Precedence: per-call context.requestPolicy > client default > a query's
-    // own createQueryContext() (e.g. ContinuId) > urql default.
-    const effectiveContext = (this.$__defaultRequestPolicy && !(context as Record<string, any>).requestPolicy)
-      ? { requestPolicy: this.$__defaultRequestPolicy, ...context }
-      : context
-    return await query.execute({ variables: variables || {}, context: effectiveContext })
+    try {
+      return await Promise.race([run(), aborted])
+    } finally {
+      if (this.abortControllers.get(queryKey) === abortController) {
+        this.abortControllers.delete(queryKey)
+      }
+    }
   }
 
   /**
@@ -813,6 +836,20 @@ export default class KnishIOClient {
     if ('setAuthData' in this.$__client) {
       (this.$__client as any).setAuthData(authToken.getAuthData())
     }
+  }
+
+  /**
+   * This device's fingerprint (ThumbmarkJS), the seed of the guest authorization wallet
+   */
+  getFingerprint(): Promise<string> {
+    return getFingerprint()
+  }
+
+  /**
+   * The browser components the fingerprint is computed from (ThumbmarkJS)
+   */
+  getFingerprintData(): Promise<Record<string, unknown>> {
+    return getFingerprintData()
   }
 
   /**
@@ -1155,12 +1192,20 @@ export default class KnishIOClient {
   }
 
   /**
-   * Cancel a specific query
+   * The key under which executeQuery registers a pending request's AbortController
+   */
+  private abortKey(query: Query | Mutation, variables: Record<string, any> | null): string {
+    return `${query.constructor.name}_${JSON.stringify(variables || {})}`
+  }
+
+  /**
+   * Cancels a pending executeQuery call made with the same query and variables: its promise
+   * rejects with an AbortError
    */
   cancelQuery(query: Query | Mutation, variables: Record<string, any> | null = null): void {
-    const queryKey = `${query.constructor.name}_${JSON.stringify(variables || {})}`
+    const queryKey = this.abortKey(query, variables)
     const controller = this.abortControllers.get(queryKey)
-    
+
     if (controller) {
       controller.abort()
       this.abortControllers.delete(queryKey)
@@ -1314,7 +1359,7 @@ export default class KnishIOClient {
     metaId = null,
     key = null,
     value = null,
-    latest = null,
+    latest = true,
     fields: _fields = null,
     filter = null,
     queryArgs = null,
@@ -1685,7 +1730,7 @@ export default class KnishIOClient {
     const query = this.createQuery(QueryToken)
 
     return this.executeQuery(query, {
-      token
+      slug: token
     }) as Promise<Response>
   }
 
@@ -2559,7 +2604,7 @@ export default class KnishIOClient {
       osCpu,
       resolution,
       timeZone,
-      json
+      json: JSON.stringify(json ?? {})
     })
 
     if (!response) {
@@ -2682,7 +2727,13 @@ export default class KnishIOClient {
   // =============================================================================
 
   /**
-   * Request guest authentication token
+   * Requests a guest authorization token (KnishIOClient.js requestGuestAuthToken): an AUTH wallet
+   * derived from this device's fingerprint sends its ML-KEM public key, and the token the ledger
+   * issues is bound to that wallet.
+   *
+   * @param cellSlug - cell to authorize for; defaults to this client's cell slug
+   * @param encrypt - whether the session uses the encrypted (CipherHash) transport
+   * @throws AuthorizationRejectedException when the ledger issues no token
    */
   async requestGuestAuthToken({
     cellSlug = null,
@@ -2690,7 +2741,7 @@ export default class KnishIOClient {
   }: {
     cellSlug?: CellSlug | string | null
     encrypt?: boolean
-  } = {}): Promise<Response> {
+  } = {}): Promise<ResponseRequestAuthorizationGuest> {
     this.log('info', 'KnishIOClient::requestGuestAuthToken() - Requesting guest auth token...')
 
     // Hold the auth guard so this login's own request does not start a nested token refresh.
@@ -2698,17 +2749,40 @@ export default class KnishIOClient {
     const authInProcess = this.$__authInProcess
     this.$__authInProcess = true
     try {
-      // Create the mutation (extends Mutation directly, not MutationProposeMolecule)
-      const mutation = this.createQuery(MutationRequestAuthorizationGuest)
+      const slug = cellSlug || this.getCellSlug()
+      this.setCellSlug(slug)
 
-      // Execute with variables
-      const response = await this.executeQuery(mutation, {
-        cellSlug: cellSlug || this.getCellSlug()
+      // The wallet the session's encryption is bound to
+      const wallet = new Wallet({
+        secret: generateSecret(await this.getFingerprint()),
+        token: 'AUTH',
+        mlKemParameterSet: this.getMlKemParameterSet(),
+        otsVersion: this.getOtsVersion()
       })
 
-      if (!response) {
+      const mutation = this.createQuery(MutationRequestAuthorizationGuest)
+      const response = await this.executeQuery(mutation, {
+        cellSlug: slug,
+        pubkey: wallet.pubkey,
+        encrypt
+      })
+
+      if (!(response instanceof ResponseRequestAuthorizationGuest)) {
         throw new CodeException('Guest auth token request failed')
       }
+      if (!response.success()) {
+        throw new AuthorizationRejectedException(`KnishIOClient::requestGuestAuthToken() - Authorization attempt rejected by ledger. Reason: ${response.reason()}`)
+      }
+
+      // Create & set an auth token from the response data
+      const authToken = AuthToken.create({
+        token: response.token(),
+        expiresAt: response.expiresAt(),
+        pubkey: response.pubKey(),
+        // The mutation does not select `encrypt`; without it in the reply, the requested mode applies
+        encrypt: String(response.encrypt() ?? encrypt) === 'true'
+      }, wallet)
+      this.setAuthToken(authToken)
 
       // Handle encryption if needed
       if (encrypt) {

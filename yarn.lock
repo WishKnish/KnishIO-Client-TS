@@ -964,6 +964,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@thumbmarkjs/thumbmarkjs@npm:^1.11.0":
+  version: 1.12.0
+  resolution: "@thumbmarkjs/thumbmarkjs@npm:1.12.0"
+  checksum: 10c0/1056e89063fe38bb6a7d5d339a3bf23156a25c6f4449a98f8027f36d473f5cbe3df311232b9090f937b71bee3a3b3cefa568c3b8f8cbebab03073a9e38795a5f
+  languageName: node
+  linkType: hard
+
 "@types/chai@npm:^5.2.2":
   version: 5.2.3
   resolution: "@types/chai@npm:5.2.3"
@@ -1240,6 +1247,7 @@ __metadata:
   resolution: "@wishknish/knishio-client-ts@workspace:."
   dependencies:
     "@noble/post-quantum": "npm:^0.7.0"
+    "@thumbmarkjs/thumbmarkjs": "npm:^1.11.0"
     "@types/node": "npm:^26.6.4"
     "@typescript-eslint/eslint-plugin": "npm:^8.71.1"
     "@typescript-eslint/parser": "npm:^8.71.1"

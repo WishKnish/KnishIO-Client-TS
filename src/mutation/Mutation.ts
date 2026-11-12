@@ -47,7 +47,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
 */
 
 import Query from '@/query/Query'
-import type Response from '@/response/Response'
+import Response from '@/response/Response'
 
 /**
  * Base class used to construct various GraphQL mutations
@@ -91,7 +91,6 @@ export default class Mutation extends Query {
     } catch (error) {
       if ((error as any).name === 'AbortError') {
         this.knishIOClient.log('warn', 'Mutation was cancelled')
-        const Response = require('@/response/Response').default
         return new Response({
           query: this,
           json: { data: null, errors: [{ message: 'Mutation was cancelled' }] }
