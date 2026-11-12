@@ -128,7 +128,8 @@ import {
   MolecularHashMismatchException,
   SignatureMismatchException,
   AtomIndexException,
-  WalletCredentialException
+  WalletCredentialException,
+  BatchIdException
 } from '@/exception'
 import type { ISecretStorageProvider } from '@/types/storage'
 import MemorySecretStorageProvider from '@/storage/MemorySecretStorageProvider'
@@ -1892,18 +1893,29 @@ export default class KnishIOClient {
   }
 
   /**
-   * Request tokens for recipient
+   * Requests tokens for a recipient, or for this client's own bundle when `to` is omitted
+   * (KnishIOClient.js requestTokens)
+   *
+   * @param token - token slug
+   * @param to - recipient: a bundle hash, a secret (a new wallet of the token is derived from it)
+   *   or a Wallet; omitted = this client's bundle
+   * @param amount - amount to request; with `units` it must be omitted (the unit count is used)
+   * @param units - stackable unit ids to request
+   * @param meta - additional metadata
+   * @param batchId - batch id; generated for a stackable token when null, refused for any other
+   * @throws BatchIdException when a batch id is given for a non-stackable token
+   * @throws StackableUnitAmountException when both units and a positive amount are given
    */
   async requestTokens({
     token,
     to = null,
     amount = null,
-    units: _units = null,
+    units = [],
     meta = null,
     batchId = null
   }: {
     token: TokenSlug | string
-    to?: WalletAddress | string | null
+    to?: WalletAddress | BundleHash | Wallet | string | null
     amount?: number | string | null
     units?: string[] | null
     meta?: Record<string, any> | null
@@ -1911,16 +1923,75 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::requestTokens() - Requesting ${amount || 'units'} of ${token}...`)
 
-    // Create the molecule mutation
+    let metaType: string | undefined
+    let metaId: string | undefined
+    const requestMeta: Record<string, any> = meta || {}
+    const unitIds = units ?? []
+
+    // Get the token to learn whether it is stackable (batch id handling)
+    const tokenResponse = await this.executeQuery(this.createQuery(QueryToken), { slug: token })
+    const tokenData = tokenResponse?.data() as Array<{ fungibility?: string }> | null | undefined
+    const isStackable = Array.isArray(tokenData) && tokenData[0]?.fungibility === 'stackable'
+
+    // NON-stackable tokens & batch ID is NOT NULL - error
+    if (!isStackable && batchId !== null) {
+      throw new BatchIdException('Expected Batch ID = null for non-stackable tokens.')
+    }
+    // Stackable tokens & batch ID is NULL - generate new one
+    if (isStackable && batchId === null) {
+      batchId = generateBatchId({})
+    }
+
+    // Calculate amount & set meta key
+    if (unitIds.length > 0) {
+      // Can't move stackable units AND provide amount
+      if (amount !== null && Number(amount) > 0) {
+        throw new StackableUnitAmountException()
+      }
+
+      // Calculating amount based on Unit IDs
+      amount = unitIds.length
+      requestMeta.tokenUnits = JSON.stringify(unitIds)
+    }
+
+    // Are we specifying a specific recipient?
+    if (to) {
+      let recipient: Wallet | string = to
+      if (typeof recipient === 'string') {
+        if (Wallet.isBundleHash(recipient)) {
+          metaType = 'walletBundle'
+          metaId = recipient
+        } else {
+          recipient = Wallet.create({
+            secret: recipient,
+            token,
+            mlKemParameterSet: this.getMlKemParameterSet(),
+            otsVersion: this.getOtsVersion()
+          })
+        }
+      }
+
+      // A Wallet recipient: help the node triangulate the transfer with position and bundle hash
+      if (recipient instanceof Wallet) {
+        metaType = 'wallet'
+        requestMeta.position = recipient.position
+        requestMeta.bundle = recipient.bundle
+        metaId = recipient.address ?? undefined
+      }
+    } else {
+      // No recipient, so request tokens for ourselves
+      metaType = 'walletBundle'
+      metaId = this.getBundle()
+    }
+
     const mutation = await this.createMoleculeMutation({ mutationClass: MutationRequestTokens })
 
-    // Initialize the request tokens mutation
-    await mutation.fillMolecule({
+    mutation.fillMolecule({
       token,
-      amount: amount ?? 0,
-      metaType: to || '',
-      metaId: to || '',
-      meta,
+      amount: amount as number | string,
+      metaType: metaType as string,
+      metaId: metaId as string,
+      meta: requestMeta,
       batchId
     })
 
@@ -1935,12 +2006,18 @@ export default class KnishIOClient {
   }
 
   /**
-   * Burn/destroy tokens
+   * Builds and submits a molecule that destroys the given amount or units of a token
+   * (KnishIOClient.js burnTokens)
+   *
+   * @param token - token slug
+   * @param amount - amount to burn; with `units` it must be omitted (the unit count is used)
+   * @param units - stackable unit ids to burn
+   * @param sourceWallet - wallet to burn from; queried when not given
    */
   async burnTokens({
     token,
     amount = null,
-    units: _units = null,
+    units = [],
     sourceWallet = null
   }: {
     token: TokenSlug | string
@@ -1950,7 +2027,9 @@ export default class KnishIOClient {
   }): Promise<Response> {
     this.log('info', `KnishIOClient::burnTokens() - Burning ${amount || 'units'} of ${token}...`)
 
-    // Get source wallet if not provided
+    const unitIds = units ?? []
+
+    // Get a source wallet
     if (!sourceWallet) {
       sourceWallet = await this.querySourceWallet({
         token,
@@ -1958,32 +2037,33 @@ export default class KnishIOClient {
       })
     }
 
-    // Create remainder wallet from source (must be same token for V-isotope conservation)
+    // Remainder wallet (same token, for V-isotope conservation)
     const remainderWallet = sourceWallet.createRemainder(this.getSecret(), this.getOtsVersion())
 
-    // Create molecule with the token-specific source and remainder wallets
+    // Calculate amount & split the units
+    if (unitIds.length > 0) {
+      // Can't burn stackable units AND provide amount
+      if (amount !== null && Number(amount) > 0) {
+        throw new StackableUnitAmountException()
+      }
+
+      // Calculating amount based on Unit IDs
+      amount = unitIds.length
+
+      sourceWallet.splitUnits(unitIds, remainderWallet)
+    }
+
     const molecule = await this.createMolecule({
       sourceWallet,
       remainderWallet
     })
+    molecule.burnToken({ amount: Number(amount ?? 0) })
+    molecule.sign({ bundle: this.getBundle() })
+    molecule.check(sourceWallet)
 
-    // Create a transfer to null address (burn)
     const mutation = await this.createMoleculeMutation({
-      mutationClass: MutationTransferTokens,
+      mutationClass: MutationProposeMolecule,
       molecule
-    })
-
-    // Create recipient wallet for burn address
-    const recipientWallet = new Wallet({
-      secret: this.getSecret(),
-      bundle: '0000000000000000000000000000000000000000000000000000000000000000',
-      token,
-      mlKemParameterSet: this.getMlKemParameterSet()
-    })
-
-    await mutation.fillMolecule({
-      recipientWallet,
-      amount: amount ?? 0
     })
 
     const response = await this.executeQuery(mutation)
@@ -2061,7 +2141,7 @@ export default class KnishIOClient {
    *
    * @param bundleHash - bundle receiving the new unit (own bundle or another identity's)
    * @param tokenSlug - stackable token slug
-   * @param newTokenUnit - id (and name) of the new unit
+   * @param newTokenUnit - the new unit; a string is used as its id and name
    * @param fusedTokenUnitIds - ids of the source wallet's units to fuse (at least two)
    * @param sourceWallet - wallet holding the units; defaults to the queried Balance wallet
    */
@@ -2074,7 +2154,7 @@ export default class KnishIOClient {
   }: {
     bundleHash: BundleHash | string
     tokenSlug: TokenSlug | string
-    newTokenUnit: string
+    newTokenUnit: TokenUnit | string
     fusedTokenUnitIds: string[]
     sourceWallet?: Wallet | null
   }): Promise<Response> {
@@ -2093,6 +2173,7 @@ export default class KnishIOClient {
     const recipientWallet = bundleHash === this.getBundle()
       ? Wallet.create({ secret: this.getSecret(), token: tokenSlug, mlKemParameterSet: this.getMlKemParameterSet(), otsVersion: this.getOtsVersion() })
       : Wallet.create({ bundle: bundleHash, token: tokenSlug, mlKemParameterSet: this.getMlKemParameterSet() })
+    recipientWallet.initBatchId({ sourceWallet })
 
     const molecule = await this.createMolecule({
       sourceWallet,

@@ -76,9 +76,9 @@ export default class TokenUnit {
   }): TokenUnit {
     let metas = data.metas || {}
     
-    if (Array.isArray(metas) && metas.length) {
+    if (typeof metas === 'string' && metas.length > 0) {
       try {
-        metas = JSON.parse(metas as any)
+        metas = JSON.parse(metas)
         if (!metas) { // set an empty object instead of an array
           metas = {}
         }

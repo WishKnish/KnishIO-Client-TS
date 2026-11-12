@@ -302,6 +302,8 @@ describe('stackable_fusion_conservation', () => {
   it('a batch-bearing source: fresh batch ids on burn and F, the source batch id on the remainder', () => {
     const source = stackableSource(['U1', 'U2', 'U3'], 'batch-source-1')
     const recipient = Wallet.create({ secret: SECRET, token: 'FUSETOK' })
+    // The caller gives the recipient its batch id, as KnishIOClient.fuseToken does
+    recipient.initBatchId({ sourceWallet: source })
     const molecule = new Molecule({ secret: SECRET, sourceWallet: source, cellSlug: 'vectors' })
 
     molecule.fuseToken({ fusedTokenUnitIds: ['U1', 'U2'], newTokenUnit: 'FUSED', recipientWallet: recipient })

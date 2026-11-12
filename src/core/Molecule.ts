@@ -859,8 +859,8 @@ export default class Molecule {
    * batch id, the burn and F atoms each get a fresh one and the remainder keeps S's.
    *
    * @param fusedTokenUnitIds - ids of S's units to fuse, caller order
-   * @param newTokenUnit - id (and name) of the new unit N
-   * @param recipientWallet - wallet receiving N
+   * @param newTokenUnit - the new unit N; a string is used as its id and name
+   * @param recipientWallet - wallet receiving N (its batch id is the caller's to set)
    */
   fuseToken({
     fusedTokenUnitIds,
@@ -868,7 +868,7 @@ export default class Molecule {
     recipientWallet
   }: {
     fusedTokenUnitIds: string[]
-    newTokenUnit: string
+    newTokenUnit: TokenUnit | string
     recipientWallet: Wallet
   }): Molecule {
     if (!this.sourceWallet || !this.remainderWallet) {
@@ -889,7 +889,10 @@ export default class Molecule {
       }
       return unit
     })
-    if (sourceUnits.some(tokenUnit => tokenUnit.id === newTokenUnit)) {
+    const newUnit = typeof newTokenUnit === 'string'
+      ? new TokenUnit(newTokenUnit, newTokenUnit, {})
+      : newTokenUnit
+    if (sourceUnits.some(tokenUnit => tokenUnit.id === newUnit.id)) {
       throw new TransferBalanceException('Token fusion unit id already exists in the source wallet')
     }
     if (balance < count) {
@@ -904,8 +907,8 @@ export default class Molecule {
     burnWallet.initBatchId({ sourceWallet })
     burnWallet.tokenUnits = fusedUnits.slice(0, -1)
 
-    recipientWallet.initBatchId({ sourceWallet })
-    recipientWallet.tokenUnits = [new TokenUnit(newTokenUnit, newTokenUnit, {
+    recipientWallet.tokenUnits = [new TokenUnit(newUnit.id, newUnit.name, {
+      ...newUnit.metas,
       fusedTokenUnits: fusedUnits.map(unit => unit.toData())
     })]
 

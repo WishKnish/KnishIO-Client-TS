@@ -56,6 +56,24 @@ detail, the entry says so instead of guessing.
   leaves a remainder and accepts a balanced B/F cross-isotope molecule, as the JS SDK does. Before,
   it compared the V sum, which the conservation check had already forced to zero for V-only
   molecules, and rejected every cross-isotope molecule checked without a sender wallet.
+- `requestTokens` signs the T atom the JS SDK signs: `to` omitted requests for this client's bundle
+  (`metaType` `walletBundle`, `metaId` = bundle), a bundle hash gives `walletBundle`, a secret or a
+  `Wallet` gives `metaType` `wallet` with `position` and `bundle` metas; `units` set the amount to the
+  unit count and add the `tokenUnits` meta; a stackable token gets a generated batch id, and a batch
+  id for any other token raises `BatchIdException`. Before, `metaType` and `metaId` were the raw
+  `to` value (or empty), `units` were dropped and the amount was 0. **Signed bytes change**; no other
+  SDK produced the old bytes.
+- `burnTokens` builds the molecule with `Molecule.burnToken` (V source, V burn, V remainder) and
+  splits `units` between the source and the remainder wallet, as the JS SDK does. Before, it sent a
+  transfer whose burn atom carried a position and wallet address derived from the client's secret,
+  and ignored `units`. **Signed bytes change**; no other SDK produced the old bytes.
+- `TokenUnit.createFromGraphQL` parses the JSON string `metas` the validator serves. Before, the
+  string was kept and re-encoded into the `tokenUnits` meta of later transfers and fusions.
+  **Signed bytes change**; no other SDK produced the old bytes.
+- `Molecule.fuseToken` accepts a `TokenUnit` as the new unit and keeps its name and metas, and no
+  longer replaces the recipient wallet's batch id; `KnishIOClient.fuseToken` gives the recipient its
+  batch id, as the JS SDK does. **Signed bytes change** for a `TokenUnit` with a name or metas; no
+  other SDK produced the old bytes.
 
 ## [1.7.0] — 2026-10-21
 
