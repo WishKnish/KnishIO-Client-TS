@@ -1,8 +1,8 @@
 /**
  * Atom hashing: cross-SDK Version4 (versioned) and legacy (unversioned) vectors.
  *
- * tests/fixtures/version4-hash-vectors.json is a vendored copy of the monorepo master
- * shared-test-results/version4-hash-vectors.json. Each `cases` entry gives client-format atoms,
+ * tests/fixtures/version4-hash-vectors.json is a vendored copy of the monorepo master of the
+ * same name. Each `cases` entry gives client-format atoms,
  * the exact JSON view string that is hashed, and the expected base17 molecular hash. Each
  * `legacyCases` entry gives atoms without a version and their expected legacy molecular hash.
  */

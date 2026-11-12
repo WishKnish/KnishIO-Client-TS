@@ -1,10 +1,10 @@
 /**
  * OTS v2 (64-chain WOTS+ keys): cross-SDK vectors plus an always-running round trip.
  *
- * The vector suite reads the shared master ../shared-test-results/ots-v2-vectors.json. In a
- * standalone checkout of this SDK it is absent, and the file registers one visible skipped test.
+ * The vector suite reads tests/fixtures/ots-v2-vectors.json, vendored from the shared master
+ * (scripts/sync-cross-sdk-fixtures.sh); a missing or unparsable fixture fails the file.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, it, expect, vi } from 'vitest'
 import Wallet from '../../src/core/Wallet'
@@ -33,8 +33,8 @@ type OtsV2Vectors = {
 }
 type MoleculeInput = Parameters<typeof Molecule.fromJSON>[0]
 
-const VECTORS_PATH = resolve(__dirname, '../../../shared-test-results/ots-v2-vectors.json')
-const vectors: OtsV2Vectors | null = existsSync(VECTORS_PATH) ? JSON.parse(readFileSync(VECTORS_PATH, 'utf8')).vectors : null
+const VECTORS_PATH = resolve(__dirname, '../fixtures/ots-v2-vectors.json')
+const vectors: OtsV2Vectors = JSON.parse(readFileSync(VECTORS_PATH, 'utf8')).vectors
 
 const EXCEPTIONS: Record<string, typeof SignatureMismatchException | typeof SignatureMalformedException> = {
   SignatureMismatch: SignatureMismatchException,
@@ -47,76 +47,72 @@ const parse = (json: unknown): Molecule => Molecule.fromJSON(json as MoleculeInp
   strictMode: false
 })
 
-if (!vectors) {
-  it.skip('ots-v2-vectors.test.ts: skipped — ../shared-test-results/ots-v2-vectors.json not found (standalone checkout)', () => {})
-} else {
-  const keyCase = (name: string): KeyCase => {
-    const found = vectors.key_derivation.tests.find(k => k.name === name)
-    if (!found) throw new Error(`missing key_derivation case ${name}`)
-    return found
-  }
-
-  describe('OTS v2 key derivation and address', () => {
-    it.each(vectors.key_derivation.tests)('$name', (vector) => {
-      const { secret, token, position } = vector
-      expect(Wallet.generateKey({ secret, token, position })).toBe(vector.expectedKeyV1)
-      expect(Wallet.generateKey({ secret, token, position, otsVersion: 2 })).toBe(vector.expectedKeyV2)
-      expect(Wallet.generateAddress(vector.expectedKeyV1)).toBe(vector.expectedAddressV1)
-      expect(Wallet.generateAddress(vector.expectedKeyV2)).toBe(vector.expectedAddressV2)
-      expect(new Wallet({ secret, token, position, otsVersion: 2 }).address).toBe(vector.expectedAddressV2)
-    })
-
-    it('an unsupported OTS version is refused', () => {
-      const message = 'KnishIO: unsupported OTS version 3; expected 1 or 2.'
-      expect(() => new Wallet({ secret: 'x', otsVersion: 3 as unknown as 1 })).toThrow(message)
-      expect(() => Wallet.generateKey({ secret: 'x', token: 'USER', position: 'y', otsVersion: 3 as unknown as 1 })).toThrow(message)
-    })
-  })
-
-  describe('OTS v2 normalized hash', () => {
-    it.each(vectors.signature.tests)('$name', (vector) => {
-      expect(Molecule.normalize(Molecule.enumerate(vector.molecularHash))).toEqual(vector.expectedNormalized)
-    })
-  })
-
-  describe('OTS v2 wallet ML-KEM identities', () => {
-    it.each(vectors.mlkem_identity.tests)('$name', (vector) => {
-      const { secret, token, position } = keyCase(vector.keyFrom)
-      const pubkey = (mlKemParameterSet: 1024 | 768): unknown =>
-        new Wallet({ secret, token, position, otsVersion: 2, mlKemParameterSet }).pubkey
-      expect(pubkey(1024)).toBe(vector.expectedMlKem1024Pubkey)
-      expect(pubkey(768)).toBe(vector.expectedMlKem768Pubkey)
-    })
-  })
-
-  describe('OTS v2 molecule verdicts', () => {
-    it.each(vectors.molecules.tests)('$name → $expected', (vector) => {
-      const molecule = parse(vector.molecule)
-      if (vector.expected === 'verified') {
-        expect(molecule.check(molecule.sourceWallet)).toBe(true)
-      } else {
-        expect(() => molecule.check(molecule.sourceWallet)).toThrow(EXCEPTIONS[vector.expected]!)
-      }
-    })
-
-    it.each(['genuine_v2', 'genuine_v1_control'])('re-signing %s reproduces every otsFragment', (name) => {
-      const vector = vectors.molecules.tests.find(t => t.name === name)!
-      const { secret, position } = keyCase('hex_secret_user')
-      const molecule = parse(vector.molecule)
-      molecule.secret = secret
-      molecule.sourceWallet = new Wallet({ secret, token: 'USER', position, otsVersion: vector.otsVersion })
-      molecule.sign()
-      expect(molecule.atoms.map(atom => atom.otsFragment)).toEqual(vector.molecule.atoms.map(atom => atom.otsFragment))
-    })
-  })
-
-  describe('OTS malformed declared hash', () => {
-    it.each(vectors.malformed_hash.tests)('$name → $expected', (vector) => {
-      const check = new CheckMolecule(parse(vector.molecule))
-      expect(() => check.ots()).toThrow(EXCEPTIONS[vector.expected]!)
-    })
-  })
+const keyCase = (name: string): KeyCase => {
+  const found = vectors.key_derivation.tests.find(k => k.name === name)
+  if (!found) throw new Error(`missing key_derivation case ${name}`)
+  return found
 }
+
+describe('OTS v2 key derivation and address', () => {
+  it.each(vectors.key_derivation.tests)('$name', (vector) => {
+    const { secret, token, position } = vector
+    expect(Wallet.generateKey({ secret, token, position })).toBe(vector.expectedKeyV1)
+    expect(Wallet.generateKey({ secret, token, position, otsVersion: 2 })).toBe(vector.expectedKeyV2)
+    expect(Wallet.generateAddress(vector.expectedKeyV1)).toBe(vector.expectedAddressV1)
+    expect(Wallet.generateAddress(vector.expectedKeyV2)).toBe(vector.expectedAddressV2)
+    expect(new Wallet({ secret, token, position, otsVersion: 2 }).address).toBe(vector.expectedAddressV2)
+  })
+
+  it('an unsupported OTS version is refused', () => {
+    const message = 'KnishIO: unsupported OTS version 3; expected 1 or 2.'
+    expect(() => new Wallet({ secret: 'x', otsVersion: 3 as unknown as 1 })).toThrow(message)
+    expect(() => Wallet.generateKey({ secret: 'x', token: 'USER', position: 'y', otsVersion: 3 as unknown as 1 })).toThrow(message)
+  })
+})
+
+describe('OTS v2 normalized hash', () => {
+  it.each(vectors.signature.tests)('$name', (vector) => {
+    expect(Molecule.normalize(Molecule.enumerate(vector.molecularHash))).toEqual(vector.expectedNormalized)
+  })
+})
+
+describe('OTS v2 wallet ML-KEM identities', () => {
+  it.each(vectors.mlkem_identity.tests)('$name', (vector) => {
+    const { secret, token, position } = keyCase(vector.keyFrom)
+    const pubkey = (mlKemParameterSet: 1024 | 768): unknown =>
+      new Wallet({ secret, token, position, otsVersion: 2, mlKemParameterSet }).pubkey
+    expect(pubkey(1024)).toBe(vector.expectedMlKem1024Pubkey)
+    expect(pubkey(768)).toBe(vector.expectedMlKem768Pubkey)
+  })
+})
+
+describe('OTS v2 molecule verdicts', () => {
+  it.each(vectors.molecules.tests)('$name → $expected', (vector) => {
+    const molecule = parse(vector.molecule)
+    if (vector.expected === 'verified') {
+      expect(molecule.check(molecule.sourceWallet)).toBe(true)
+    } else {
+      expect(() => molecule.check(molecule.sourceWallet)).toThrow(EXCEPTIONS[vector.expected]!)
+    }
+  })
+
+  it.each(['genuine_v2', 'genuine_v1_control'])('re-signing %s reproduces every otsFragment', (name) => {
+    const vector = vectors.molecules.tests.find(t => t.name === name)!
+    const { secret, position } = keyCase('hex_secret_user')
+    const molecule = parse(vector.molecule)
+    molecule.secret = secret
+    molecule.sourceWallet = new Wallet({ secret, token: 'USER', position, otsVersion: vector.otsVersion })
+    molecule.sign()
+    expect(molecule.atoms.map(atom => atom.otsFragment)).toEqual(vector.molecule.atoms.map(atom => atom.otsFragment))
+  })
+})
+
+describe('OTS malformed declared hash', () => {
+  it.each(vectors.malformed_hash.tests)('$name → $expected', (vector) => {
+    const check = new CheckMolecule(parse(vector.molecule))
+    expect(() => check.ots()).toThrow(EXCEPTIONS[vector.expected]!)
+  })
+})
 
 describe('OTS v2 round trip', () => {
   const SECRET = 'e'.repeat(2048)

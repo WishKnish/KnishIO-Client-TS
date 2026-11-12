@@ -11,12 +11,11 @@
  * Deposit emits V(source -balance) B(buffer +amount) V(remainder +(balance-amount));
  * withdraw emits B(source -balance) V(recipient +amount) B(remainder +(balance-amount)).
  *
- * Standalone-CI note: the monorepo-parent master is ABSENT in a standalone GitHub
- * checkout. The fixture is read at runtime; when it is missing this file registers
- * one skipped test naming the absent path (mirrors generate-secret-parity.test.ts).
+ * The fixture tests/fixtures/canonical-patent-vectors.json is vendored from the shared master
+ * (scripts/sync-cross-sdk-fixtures.sh); a missing or unparsable fixture fails the file.
  */
 
-import { existsSync, readFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { describe, it, expect } from 'vitest'
 import Wallet from '../../src/core/Wallet'
@@ -64,92 +63,88 @@ type BufferVectors = {
   }
 }
 
-const FIXTURE = resolve(__dirname, '../../../shared-test-results/canonical-patent-vectors.json')
-const fixture: BufferVectors | null = existsSync(FIXTURE) ? JSON.parse(readFileSync(FIXTURE, 'utf8')) : null
+const FIXTURE = resolve(__dirname, '../fixtures/canonical-patent-vectors.json')
+const fixture: BufferVectors = JSON.parse(readFileSync(FIXTURE, 'utf8'))
 
-if (!fixture) {
-  it.skip('buffer-conservation.test.ts: skipped — ../shared-test-results/canonical-patent-vectors.json not found (standalone checkout)', () => {})
-} else {
-  const vectors = fixture.vectors
+const vectors = fixture.vectors
 
-  describe('buffer_deposit_conservation', () => {
-    it.each(vectors.buffer_deposit_conservation.tests)(
-      'deposit $name: full-balance debit conserves (sum V+B = 0)',
-      (vector) => {
-        const sourceWallet = Wallet.create({ secret: BUF_SECRET, token: 'BUFTOK' })
-        sourceWallet.balance = String(vector.sourceBalance)
-        const mol = new Molecule({ secret: BUF_SECRET, bundle: sourceWallet.bundle, sourceWallet, cellSlug: 'buftest' })
-        mol.initDepositBuffer({ amount: vector.amount, tradeRates: {} })
+describe('buffer_deposit_conservation', () => {
+  it.each(vectors.buffer_deposit_conservation.tests)(
+    'deposit $name: full-balance debit conserves (sum V+B = 0)',
+    (vector) => {
+      const sourceWallet = Wallet.create({ secret: BUF_SECRET, token: 'BUFTOK' })
+      sourceWallet.balance = String(vector.sourceBalance)
+      const mol = new Molecule({ secret: BUF_SECRET, bundle: sourceWallet.bundle, sourceWallet, cellSlug: 'buftest' })
+      mol.initDepositBuffer({ amount: vector.amount, tradeRates: {} })
 
-        const vb = mol.atoms.filter((a) => a.isotope === 'V' || a.isotope === 'B')
-        const sum = vb.reduce((s, a) => s + BigInt(a.value ?? '0'), 0n)
-        expect(sum.toString()).toBe(vector.expectedSum)
+      const vb = mol.atoms.filter((a) => a.isotope === 'V' || a.isotope === 'B')
+      const sum = vb.reduce((s, a) => s + BigInt(a.value ?? '0'), 0n)
+      expect(sum.toString()).toBe(vector.expectedSum)
 
-        // Emit order: source V (full-balance debit), buffer B (+amount), remainder V (+change).
-        const vAtoms = mol.atoms.filter((a) => a.isotope === 'V')
-        const bAtom = mol.atoms.find((a) => a.isotope === 'B')
-        expect(vAtoms[0].value).toBe(vector.expectedSourceValue)
-        expect(bAtom?.value).toBe(vector.expectedBufferValue)
-        expect(vAtoms[1].value).toBe(vector.expectedRemainderValue)
-      },
-    )
-  })
+      // Emit order: source V (full-balance debit), buffer B (+amount), remainder V (+change).
+      const vAtoms = mol.atoms.filter((a) => a.isotope === 'V')
+      const bAtom = mol.atoms.find((a) => a.isotope === 'B')
+      expect(vAtoms[0].value).toBe(vector.expectedSourceValue)
+      expect(bAtom?.value).toBe(vector.expectedBufferValue)
+      expect(vAtoms[1].value).toBe(vector.expectedRemainderValue)
+    },
+  )
+})
 
-  describe('buffer_withdraw_conservation', () => {
-    it.each(vectors.buffer_withdraw_conservation.tests)(
-      'withdraw $name: full-balance debit conserves (sum B+V = 0)',
-      (vector) => {
-        const sourceWallet = Wallet.create({ secret: BUF_SECRET, token: 'BUFTOK' })
-        sourceWallet.balance = String(vector.sourceBalance)
-        const mol = new Molecule({ secret: BUF_SECRET, bundle: sourceWallet.bundle, sourceWallet, cellSlug: 'buftest' })
-        // Withdraw `amount` to the caller's own bundle (single recipient), mirroring the client wrapper.
-        mol.initWithdrawBuffer({ recipients: { [sourceWallet.bundle!]: vector.amount } })
+describe('buffer_withdraw_conservation', () => {
+  it.each(vectors.buffer_withdraw_conservation.tests)(
+    'withdraw $name: full-balance debit conserves (sum B+V = 0)',
+    (vector) => {
+      const sourceWallet = Wallet.create({ secret: BUF_SECRET, token: 'BUFTOK' })
+      sourceWallet.balance = String(vector.sourceBalance)
+      const mol = new Molecule({ secret: BUF_SECRET, bundle: sourceWallet.bundle, sourceWallet, cellSlug: 'buftest' })
+      // Withdraw `amount` to the caller's own bundle (single recipient), mirroring the client wrapper.
+      mol.initWithdrawBuffer({ recipients: { [sourceWallet.bundle!]: vector.amount } })
 
-        const vb = mol.atoms.filter((a) => a.isotope === 'V' || a.isotope === 'B')
-        const sum = vb.reduce((s, a) => s + BigInt(a.value ?? '0'), 0n)
-        expect(sum.toString()).toBe(vector.expectedSum)
+      const vb = mol.atoms.filter((a) => a.isotope === 'V' || a.isotope === 'B')
+      const sum = vb.reduce((s, a) => s + BigInt(a.value ?? '0'), 0n)
+      expect(sum.toString()).toBe(vector.expectedSum)
 
-        // Emit order: source B (full-balance debit), recipient V (+amount), remainder B (+change).
-        const bAtoms = mol.atoms.filter((a) => a.isotope === 'B')
-        const vAtom = mol.atoms.find((a) => a.isotope === 'V')
-        expect(bAtoms[0].value).toBe(vector.expectedSourceValue)
-        expect(vAtom?.value).toBe(vector.expectedRecipientValue)
-        expect(bAtoms[1].value).toBe(vector.expectedRemainderValue)
-      },
-    )
-  })
+      // Emit order: source B (full-balance debit), recipient V (+amount), remainder B (+change).
+      const bAtoms = mol.atoms.filter((a) => a.isotope === 'B')
+      const vAtom = mol.atoms.find((a) => a.isotope === 'V')
+      expect(bAtoms[0].value).toBe(vector.expectedSourceValue)
+      expect(vAtom?.value).toBe(vector.expectedRecipientValue)
+      expect(bAtoms[1].value).toBe(vector.expectedRemainderValue)
+    },
+  )
+})
 
-  describe('buffer_withdraw_fresh_remainder', () => {
-    it.each(vectors.buffer_withdraw_fresh_remainder.tests)(
-      'withdraw $name: buffer source, change to a fresh position, passes check()',
-      (vector) => {
-        // The client wrapper's shape: the buffer wallet signs, its change goes to createRemainder()
-        const bufferWallet = Wallet.create({ secret: BUF_SECRET, token: 'BUFTOK' })
-        bufferWallet.balance = String(vector.sourceBalance)
-        const mol = new Molecule({
-          secret: BUF_SECRET,
-          bundle: bufferWallet.bundle,
-          sourceWallet: bufferWallet,
-          remainderWallet: bufferWallet.createRemainder(BUF_SECRET),
-          cellSlug: 'buftest'
-        })
-        mol.initWithdrawBuffer({ recipients: { [bufferWallet.bundle!]: vector.amount } })
-        mol.sign({})
-        expect(mol.check(bufferWallet)).toBe(true)
+describe('buffer_withdraw_fresh_remainder', () => {
+  it.each(vectors.buffer_withdraw_fresh_remainder.tests)(
+    'withdraw $name: buffer source, change to a fresh position, passes check()',
+    (vector) => {
+      // The client wrapper's shape: the buffer wallet signs, its change goes to createRemainder()
+      const bufferWallet = Wallet.create({ secret: BUF_SECRET, token: 'BUFTOK' })
+      bufferWallet.balance = String(vector.sourceBalance)
+      const mol = new Molecule({
+        secret: BUF_SECRET,
+        bundle: bufferWallet.bundle,
+        sourceWallet: bufferWallet,
+        remainderWallet: bufferWallet.createRemainder(BUF_SECRET),
+        cellSlug: 'buftest'
+      })
+      mol.initWithdrawBuffer({ recipients: { [bufferWallet.bundle!]: vector.amount } })
+      mol.sign({})
+      expect(mol.check(bufferWallet)).toBe(true)
 
-        expect(mol.atoms.map((a) => a.isotope)).toEqual(vector.expectedIsotopes)
-        const [source, recipient, remainder] = mol.atoms
-        expect(source.value).toBe(vector.expectedSourceValue)
-        expect(source.position).toBe(bufferWallet.position)
-        expect(recipient.value).toBe(vector.expectedRecipientValue)
-        expect([recipient.walletAddress, recipient.metaType, recipient.metaId]).toEqual([null, 'walletBundle', bufferWallet.bundle])
-        expect(remainder.value).toBe(vector.expectedRemainderValue)
-        expect(remainder.position !== source.position).toBe(vector.expectedRemainderPositionDistinctFromSource)
-        expect(remainder.walletAddress).not.toBe(source.walletAddress)
+      expect(mol.atoms.map((a) => a.isotope)).toEqual(vector.expectedIsotopes)
+      const [source, recipient, remainder] = mol.atoms
+      expect(source.value).toBe(vector.expectedSourceValue)
+      expect(source.position).toBe(bufferWallet.position)
+      expect(recipient.value).toBe(vector.expectedRecipientValue)
+      expect([recipient.walletAddress, recipient.metaType, recipient.metaId]).toEqual([null, 'walletBundle', bufferWallet.bundle])
+      expect(remainder.value).toBe(vector.expectedRemainderValue)
+      expect(remainder.position !== source.position).toBe(vector.expectedRemainderPositionDistinctFromSource)
+      expect(remainder.walletAddress).not.toBe(source.walletAddress)
 
-        const sum = mol.atoms.reduce((s, a) => s + BigInt(a.value ?? '0'), 0n)
-        expect(sum.toString()).toBe(vector.expectedSum)
-      },
-    )
-  })
-}
+      const sum = mol.atoms.reduce((s, a) => s + BigInt(a.value ?? '0'), 0n)
+      expect(sum.toString()).toBe(vector.expectedSum)
+    },
+  )
+})

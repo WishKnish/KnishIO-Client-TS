@@ -3,8 +3,8 @@
  * creation × OTS v1/v2 × unique/colliding createdAt) that must verify and re-sign byte for byte
  * under whichever backend this run uses (KNISHIO_KCORE=off for the built-in path, =require for kcore).
  *
- * The fixture tests/fixtures/kcore-parity-vectors.json is vendored from the shared master
- * ../shared-test-results/kcore-parity-vectors.json; a missing fixture fails the file.
+ * The fixture tests/fixtures/kcore-parity-vectors.json is vendored from the shared master of the
+ * same name (scripts/sync-cross-sdk-fixtures.sh); a missing fixture fails the file.
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
