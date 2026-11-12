@@ -52,7 +52,7 @@ License: https://github.com/WishKnish/KnishIO-Client-TS/blob/master/LICENSE
  */
 
 import JsSHA from 'jssha'
-import { randomString } from './strings'
+import { base64ToHex, randomString } from './strings'
 import * as kcore from './kcore'
 import SignatureMalformedException from '../exception/SignatureMalformedException'
 import type { 
@@ -663,7 +663,14 @@ export function generateOTSSignature(privateKey: string, molecularHash: string):
 
 /**
  * Verify WOTS+ one-time signature against molecular hash and address
- * MUST match JavaScript SDK implementation exactly
+ * MUST match JavaScript SDK implementation exactly (CheckMolecule.js ots())
+ *
+ * @param otsFragments - the concatenated signature: 2048 (v1) or 8192 (v2) hex characters, or
+ *   the base64-compressed form, which is expanded first
+ * @param molecularHash - the base17 molecular hash the molecule was signed over
+ *   (^[0-9a-g]{64}$). A 64-character hex hash is also accepted and converted to base17 first,
+ *   the form this function took before it accepted the base17 hash directly.
+ * @param signingAddress - the address the signature must reconstruct
  */
 export function verifyOTSSignature(
   otsFragments: string,
@@ -673,57 +680,70 @@ export function verifyOTSSignature(
   if (!otsFragments || !molecularHash || !signingAddress) {
     return false
   }
-  
+
   try {
-    // Step 1: Convert molecular hash to base17 and normalize
-    const base17Hash = convertToBase17(molecularHash)
-    if (!isSignableMolecularHash(base17Hash)) {
-      return false
-    }
-    const enumerated = enumerateMolecularHash(base17Hash)
-    const normalized = normalizeMolecularHash(enumerated)
-
-    // Step 2: Fragments must be the uncompressed 2048-character (v1) or 8192-character (v2)
-    // form. Base64-compressed signatures are not supported and are rejected here rather than expanded.
-    const ots = otsFragments
+    // Step 1: Fragments are the uncompressed 2048-character (v1) or 8192-character (v2) form;
+    // anything else is the base64-compressed form, and the decoded length decides the version
+    let ots = otsFragments
     if (ots.length !== 2048 && ots.length !== 8192) {
-      return false
+      ots = base64ToHex(ots).toLowerCase()
+      if (ots.length !== 2048 && ots.length !== 8192) {
+        return false
+      }
     }
 
-    // Step 3: Subdivide OTS into segments of 128 characters each (16 for v1, 64 for v2)
-    const otsChunks: string[] = []
-    for (let i = 0; i < ots.length; i += CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE) {
-      otsChunks.push(ots.substring(i, i + CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE))
+    // Step 2: The signed hash is the base17 molecular hash itself. A hex hash (the only input
+    // form this function accepted before) is converted to base17 and checked as well.
+    if (isSignableMolecularHash(molecularHash) && otsMatchesAddress(ots, molecularHash, signingAddress)) {
+      return true
     }
-    
-    // Step 4: Process each chunk for verification: hash (8 + normalized[index]) times
-    const keyFragments = kcore.chainsHex(ots, otsChunks.map((_, i) => 8 + (normalized[i] || 0))) ?? otsChunks.map((chunk, index) => {
-      let workingChunk = chunk
-      const iterations = 8 + (normalized[index] || 0)
-      for (let j = 0; j < iterations; j++) {
-        const sponge = new JsSHA('SHAKE256', 'TEXT')
-        sponge.update(workingChunk)
-        workingChunk = sponge.getHash('HEX', { outputLen: 512 }) // 512 bits
-      }
-      return workingChunk
-    }).join('')
-    
-    // Step 5: Generate digest from reconstructed key fragments
-    const digestSponge = new JsSHA('SHAKE256', 'TEXT')
-    digestSponge.update(keyFragments)
-    const digest = digestSponge.getHash('HEX', { outputLen: 8192 }) // 8192 bits
-    
-    // Step 6: Generate address from digest
-    const addressSponge = new JsSHA('SHAKE256', 'TEXT')
-    addressSponge.update(digest)
-    const reconstructedAddress = addressSponge.getHash('HEX', { outputLen: 256 }) // 256 bits
-    
-    // Step 7: Compare with expected signing address
-    return reconstructedAddress.toLowerCase() === signingAddress.toLowerCase()
+    if (/^[0-9a-f]{64}$/i.test(molecularHash)) {
+      const base17Hash = convertToBase17(molecularHash)
+      return isSignableMolecularHash(base17Hash) && otsMatchesAddress(ots, base17Hash, signingAddress)
+    }
+    return false
   } catch (error) {
     if (error instanceof kcore.KcoreUnavailable) throw error
     return false
   }
+}
+
+/**
+ * Reconstructs the signing address from expanded OTS fragments and a base17 molecular hash
+ */
+function otsMatchesAddress(ots: string, base17Hash: string, signingAddress: string): boolean {
+  const enumerated = enumerateMolecularHash(base17Hash)
+  const normalized = normalizeMolecularHash(enumerated)
+  // Subdivide OTS into segments of 128 characters each (16 for v1, 64 for v2)
+  const otsChunks: string[] = []
+  for (let i = 0; i < ots.length; i += CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE) {
+    otsChunks.push(ots.substring(i, i + CRYPTO_CONSTANTS.KEY_FRAGMENT_SIZE))
+  }
+
+  // Process each chunk for verification: hash (8 + normalized[index]) times
+  const keyFragments = kcore.chainsHex(ots, otsChunks.map((_, i) => 8 + (normalized[i] || 0))) ?? otsChunks.map((chunk, index) => {
+    let workingChunk = chunk
+    const iterations = 8 + (normalized[index] || 0)
+    for (let j = 0; j < iterations; j++) {
+      const sponge = new JsSHA('SHAKE256', 'TEXT')
+      sponge.update(workingChunk)
+      workingChunk = sponge.getHash('HEX', { outputLen: 512 }) // 512 bits
+    }
+    return workingChunk
+  }).join('')
+
+  // Generate digest from reconstructed key fragments
+  const digestSponge = new JsSHA('SHAKE256', 'TEXT')
+  digestSponge.update(keyFragments)
+  const digest = digestSponge.getHash('HEX', { outputLen: 8192 }) // 8192 bits
+
+  // Generate address from digest
+  const addressSponge = new JsSHA('SHAKE256', 'TEXT')
+  addressSponge.update(digest)
+  const reconstructedAddress = addressSponge.getHash('HEX', { outputLen: 256 }) // 256 bits
+
+  // Compare with expected signing address
+  return reconstructedAddress.toLowerCase() === signingAddress.toLowerCase()
 }
 
 // =============================================================================
@@ -741,12 +761,11 @@ export function validateOTSSignature(signature: string): boolean {
 }
 
 /**
- * Validate molecular hash for base17 conversion
+ * Validate a molecular hash for OTS signing: exactly 64 lowercase base17 characters, the same
+ * rule signing and CheckMolecule.ots() apply
  */
 export function validateMolecularHashForSignature(hash: string): boolean {
-  if (!hash || typeof hash !== 'string') return false
-  if (hash.length !== 64) return false
-  return /^[0-9a-f]+$/i.test(hash)
+  return isSignableMolecularHash(hash)
 }
 
 // =============================================================================

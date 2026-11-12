@@ -42,6 +42,21 @@ detail, the entry says so instead of guessing.
   `AccessToken`, U-isotope `ProposeMolecule`) are not affected. The PHP and C SDKs already applied
   this rule.
 
+### Fixed
+
+- `verifyOTSSignature` accepts the base17 molecular hash a molecule is signed over, as
+  `CheckMolecule.ots()` does, and expands base64-compressed signatures. Before, it converted the hash
+  to base17 a second time, so a valid signature returned `false` (always when the hash contained
+  `g`), and compressed signatures were rejected. A 64-character hex hash, the form it took before,
+  is still accepted. `validateMolecularHashForSignature` now applies the signing rule
+  (`^[0-9a-g]{64}$`) instead of requiring hex.
+- `CheckMolecule.fromServerData` keeps a `null` value in object-form `metasJson` as `null`; it was
+  turned into the string `"null"`, which was hashed, so `verifyFromServerData` rejected the molecule.
+- `CheckMolecule.isotopeV` without a sender wallet rejects a V-only molecule whose last V atom
+  leaves a remainder and accepts a balanced B/F cross-isotope molecule, as the JS SDK does. Before,
+  it compared the V sum, which the conservation check had already forced to zero for V-only
+  molecules, and rejected every cross-isotope molecule checked without a sender wallet.
+
 ## [1.7.0] — 2026-10-21
 
 ### Changed

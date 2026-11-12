@@ -678,7 +678,7 @@ export default class CheckMolecule {
       if (!hasCrossIsotope && remainder !== sum) {
         throw new TransferRemainderException()
       }
-    } else if (sum !== 0) {
+    } else if (!hasCrossIsotope && value !== 0) {
       // No senderWallet, but have a remainder?
       throw new TransferRemainderException()
     }
@@ -793,14 +793,14 @@ export default class CheckMolecule {
     atoms?: any[]
   }): Molecule {
     const mappedAtoms = atoms.map((serverAtom: any) => {
-      let meta: Array<{ key: string; value: string }> = []
+      let meta: Array<{ key: string; value: string | null }> = []
       if (serverAtom.metasJson) {
         try {
           const parsed = JSON.parse(serverAtom.metasJson)
           if (Array.isArray(parsed)) {
             meta = parsed
           } else if (parsed && typeof parsed === 'object') {
-            meta = Object.entries(parsed).map(([key, value]) => ({ key, value: String(value) }))
+            meta = Object.entries(parsed).map(([key, value]) => ({ key, value: value == null ? null : String(value) }))
           }
         } catch (e) {
           meta = []
