@@ -15,6 +15,16 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-11-13
+
+### Upgrade notes
+
+- A reply to a request sent in the CipherHash envelope is accepted only as an encrypted envelope; a
+  plaintext reply now fails (see Security).
+- `requestTokens`, `burnTokens`, `Molecule.fuseToken`, `TokenUnit.createFromGraphQL`, `queryToken`
+  and `queryMeta` now build and send what the JS SDK does; several of them change signed bytes or
+  arguments (see Fixed).
+
 ### Added
 
 - CI generates a CycloneDX SBOM of the published dependency graph (`.github/scripts/sbom.sh`) and scans it
@@ -897,7 +907,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.7.0...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.8.0...HEAD
+[1.8.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.8.0
 [1.7.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.7.0
 [1.6.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.6.0
 [1.5.5]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.5.5
