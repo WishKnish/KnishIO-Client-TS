@@ -193,6 +193,16 @@ export default class Molecule {
   }
 
   /**
+   * Fills this molecule's properties with those of the provided object
+   * Matches JavaScript SDK fill method
+   */
+  fill(molecule: Partial<Molecule>): void {
+    for (const key of Object.keys(molecule)) {
+      (this as Record<string, unknown>)[key] = (molecule as Record<string, unknown>)[key]
+    }
+  }
+
+  /**
    * Add an atom to this molecule
    * Matches JavaScript SDK addAtom method
    */

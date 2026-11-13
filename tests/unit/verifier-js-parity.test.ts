@@ -3,15 +3,15 @@
  * - the exported verifyOTSSignature takes the base17 molecular hash a molecule is signed over,
  *   uncompressed or base64-compressed fragments, OTS v1 and v2;
  * - fromServerData keeps a null object-meta value null, so it is not hashed as "null";
- * - isotopeV without a sender wallet rejects a V-only molecule that leaves a remainder and does
- *   not reject a balanced cross-isotope (B/F) molecule.
+ * - isotopeV without a sender wallet accepts a balanced V-only molecule that leaves a remainder,
+ *   rejects an unbalanced one, and does not reject a balanced cross-isotope (B/F) molecule.
  */
 import { describe, it, expect } from 'vitest'
 import Atom from '../../src/core/Atom'
 import Molecule from '../../src/core/Molecule'
 import Wallet from '../../src/core/Wallet'
 import CheckMolecule from '../../src/libraries/CheckMolecule'
-import TransferRemainderException from '../../src/exception/TransferRemainderException'
+import TransferUnbalancedException from '../../src/exception/TransferUnbalancedException'
 import {
   convertToBase17,
   generateSecret,
@@ -111,9 +111,16 @@ describe('CheckMolecule.isotopeV without a sender wallet', () => {
     return new CheckMolecule(molecule as never)
   }
 
-  it('rejects a balanced V-only molecule that leaves a remainder', () => {
+  // The validator and every served-molecule check verify transfers with no sender wallet, so a
+  // balanced transfer whose remainder atom is non-zero must pass; conservation is still enforced.
+  it('accepts a balanced V-only molecule that leaves a remainder', () => {
     const check = build([['V', wallet('aa'.repeat(32)), -10], ['V', wallet('bb'.repeat(32)), 4], ['V', wallet('cc'.repeat(32)), 6]])
-    expect(() => check.isotopeV(null)).toThrow(TransferRemainderException)
+    expect(check.isotopeV(null)).toBe(true)
+  })
+
+  it('rejects an unbalanced V-only molecule', () => {
+    const check = build([['V', wallet('aa'.repeat(32)), -10], ['V', wallet('bb'.repeat(32)), 4], ['V', wallet('cc'.repeat(32)), 5]])
+    expect(() => check.isotopeV(null)).toThrow(TransferUnbalancedException)
   })
 
   it('accepts a balanced V-only molecule whose last V atom is zero', () => {

@@ -64,10 +64,12 @@ detail, the entry says so instead of guessing.
   (`^[0-9a-g]{64}$`) instead of requiring hex.
 - `CheckMolecule.fromServerData` keeps a `null` value in object-form `metasJson` as `null`; it was
   turned into the string `"null"`, which was hashed, so `verifyFromServerData` rejected the molecule.
-- `CheckMolecule.isotopeV` without a sender wallet rejects a V-only molecule whose last V atom
-  leaves a remainder and accepts a balanced B/F cross-isotope molecule, as the JS SDK does. Before,
-  it compared the V sum, which the conservation check had already forced to zero for V-only
-  molecules, and rejected every cross-isotope molecule checked without a sender wallet.
+- `CheckMolecule.isotopeV` without a sender wallet applies V-only conservation and nothing more: a
+  balanced V-only transfer whose last (remainder) atom is non-zero verifies, as do balanced B/F
+  cross-isotope molecules. Before, it rejected every cross-isotope molecule checked without a
+  sender wallet. The JS SDK has dropped its no-sender remainder rule as well (it rejected ordinary
+  transfers; the validator does not apply it).
+- `Molecule.fill()` exists, as in the JS SDK: it copies every property of the given object.
 - `requestTokens` signs the T atom the JS SDK signs: `to` omitted requests for this client's bundle
   (`metaType` `walletBundle`, `metaId` = bundle), a bundle hash gives `walletBundle`, a secret or a
   `Wallet` gives `metaType` `wallet` with `position` and `bundle` metas; `units` set the amount to the
