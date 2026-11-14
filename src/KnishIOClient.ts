@@ -53,7 +53,7 @@ import {
   generateSecret,
   generateBatchId
 } from '@/libraries/crypto'
-import { getFingerprint, getFingerprintData } from '@thumbmarkjs/thumbmarkjs'
+import { Thumbmark } from '@thumbmarkjs/thumbmarkjs'
 import Molecule from '@/core/Molecule'
 import Wallet from '@/core/Wallet'
 import TokenUnit from '@/core/TokenUnit'
@@ -841,15 +841,17 @@ export default class KnishIOClient {
   /**
    * This device's fingerprint (ThumbmarkJS), the seed of the guest authorization wallet
    */
-  getFingerprint(): Promise<string> {
-    return getFingerprint()
+  async getFingerprint(): Promise<string> {
+    const { thumbmark } = await new Thumbmark().get()
+    return thumbmark
   }
 
   /**
    * The browser components the fingerprint is computed from (ThumbmarkJS)
    */
-  getFingerprintData(): Promise<Record<string, unknown>> {
-    return getFingerprintData()
+  async getFingerprintData(): Promise<Record<string, unknown>> {
+    const { components } = await new Thumbmark().get()
+    return components
   }
 
   /**

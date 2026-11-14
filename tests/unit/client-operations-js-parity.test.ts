@@ -14,6 +14,7 @@ import Response from '../../src/response/Response'
 import MutationActiveSession from '../../src/mutation/MutationActiveSession'
 import { AuthorizationRejectedException } from '../../src/exception'
 import { generateBundleHash, generateSecret } from '../../src/libraries/crypto'
+import { Thumbmark } from '@thumbmarkjs/thumbmarkjs'
 
 type Call = { variables: Record<string, unknown> }
 
@@ -57,6 +58,22 @@ describe('requestGuestAuthToken', () => {
 
     await expect(client.requestGuestAuthToken({ cellSlug: 'cell', encrypt: false })).rejects.toThrow(AuthorizationRejectedException)
     expect(client.getAuthToken()).toBeNull()
+  })
+})
+
+describe('fingerprint', () => {
+  it('getFingerprint and getFingerprintData read the ThumbmarkJS Thumbmark result', async () => {
+    const get = vi.spyOn(Thumbmark.prototype, 'get').mockResolvedValue({
+      thumbmark: 'tm-hash-1',
+      components: { locales: { timezone: 'UTC' } },
+      info: {},
+      version: '1.12.0'
+    } as never)
+    const client = makeClient()
+
+    expect(await client.getFingerprint()).toBe('tm-hash-1')
+    expect(await client.getFingerprintData()).toEqual({ locales: { timezone: 'UTC' } })
+    expect(get).toHaveBeenCalledTimes(2)
   })
 })
 
