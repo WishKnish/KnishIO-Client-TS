@@ -15,6 +15,8 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-11-13
+
 ### Fixed
 
 - `KnishIOClient.getFingerprint` and `getFingerprintData` called ThumbmarkJS's deprecated
@@ -915,7 +917,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.8.0...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.8.1...HEAD
+[1.8.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.8.1
 [1.8.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.8.0
 [1.7.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.7.0
 [1.6.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.6.0
