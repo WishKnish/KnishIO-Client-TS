@@ -15,6 +15,8 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+## [1.8.2] — 2026-11-17
+
 ### Upgrade notes
 
 - `TokenUnit.createFromGraphQL` now throws `SyntaxError` when a unit's `metas` string is not JSON,
@@ -927,7 +929,8 @@ Published to npm; no corresponding git tag exists in this repository.
 commit messages do not support accurate reconstruction. See the git tag history
 and the [npm version list](https://www.npmjs.com/package/@wishknish/knishio-client-ts?activeTab=versions).
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.8.1...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Client-TS/compare/1.8.2...HEAD
+[1.8.2]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.8.2
 [1.8.1]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.8.1
 [1.8.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.8.0
 [1.7.0]: https://github.com/WishKnish/KnishIO-Client-TS/releases/tag/1.7.0
