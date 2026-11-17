@@ -75,14 +75,11 @@ export default class TokenUnit {
     metas?: any
   }): TokenUnit {
     let metas = data.metas || {}
-    
+
     if (typeof metas === 'string' && metas.length > 0) {
-      try {
-        metas = JSON.parse(metas)
-        if (!metas) { // set an empty object instead of an array
-          metas = {}
-        }
-      } catch (error) {
+      // Invalid JSON throws SyntaxError, as in the JS SDK.
+      metas = JSON.parse(metas)
+      if (!metas) { // set an empty object instead of an array
         metas = {}
       }
     }

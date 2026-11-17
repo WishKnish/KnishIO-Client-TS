@@ -15,6 +15,16 @@ detail, the entry says so instead of guessing.
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- `TokenUnit.createFromGraphQL` now throws `SyntaxError` when a unit's `metas` string is not JSON,
+  as the JS SDK does; it used to read such metas as `{}` and sign them.
+
+### Fixed
+
+- `TokenUnit.createFromGraphQL` no longer swallows invalid `metas` JSON (see Upgrade notes). Signed
+  bytes for valid metas are unchanged; a test pins the JS SDK's key order for served metas.
+
 ## [1.8.1] — 2026-11-13
 
 ### Fixed

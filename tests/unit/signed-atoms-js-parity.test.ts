@@ -142,6 +142,22 @@ describe('TokenUnit.createFromGraphQL', () => {
     expect(TokenUnit.createFromGraphQL({ id: 'u1', name: 'U1', metas: '' }).metas).toEqual({})
     expect(TokenUnit.createFromGraphQL({ id: 'u1', name: 'U1' }).metas).toEqual({})
   })
+
+  it('throws on metas that are not JSON, as JS does', () => {
+    expect(() => TokenUnit.createFromGraphQL({ id: 'u1', name: 'U1', metas: 'not json' })).toThrow(SyntaxError)
+  })
+
+  it('reads null metas as an empty object', () => {
+    expect(TokenUnit.createFromGraphQL({ id: 'u1', name: 'U1', metas: null }).metas).toEqual({})
+    expect(TokenUnit.createFromGraphQL({ id: 'u1', name: 'U1', metas: 'null' }).metas).toEqual({})
+  })
+
+  it('signs served metas in JS key order', () => {
+    // The JS SDK's TokenUnit.createFromGraphQL + JSON.stringify([unit.toData()]) printed this string.
+    const metas = '{"b":1,"10":{"z":true,"2":[1,{"y":null,"1":"x"}]},"a":"s","05":"lead","9":false}'
+    const unit = TokenUnit.createFromGraphQL({ id: 'u1', name: 'u1', metas })
+    expect(JSON.stringify([unit.toData()])).toBe('[["u1","u1",{"9":false,"10":{"2":[1,{"1":"x","y":null}],"z":true},"b":1,"a":"s","05":"lead"}]]')
+  })
 })
 
 describe('Molecule.fuseToken', () => {
